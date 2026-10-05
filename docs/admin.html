@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin - Attendance System</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+         background: linear-gradient(rgba(244,246,250,.9), rgba(244,246,250,.9)),
+                     url('bg.jpg') center top / cover no-repeat fixed;
+         color: #222; max-width: 640px; margin: 0 auto; padding: 16px; min-height: 100vh; }
+  .footer { text-align: center; margin: 48px 0 12px; padding: 18px 14px;
+           font-size: 17px; font-weight: 800; color: #fff;
+           background: linear-gradient(135deg, #1565d8, #7b2ff7);
+           border-radius: 16px; box-shadow: 0 6px 18px rgba(80,60,200,.35); }
+  .footer a { color: #fff; }
+  .logo-wrap { text-align: center; margin: 10px 0 2px; }
+  .logo { max-width: 170px; height: auto; }
+  h1 { text-align: center; font-size: 20px; margin: 12px 0 16px; }
+  .card { background: #fff; border-radius: 14px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+  .hidden { display: none; }
+  label { display: block; font-size: 14px; color: #555; margin: 14px 0 6px; }
+  select, input { width: 100%; padding: 12px; font-size: 16px; border: 1px solid #d5dbe7;
+                  border-radius: 10px; background: #fff; }
+  .btn-blue { background: #2f6fed; padding: 12px 0; font-size: 16px; width: 100%;
+              border: none; border-radius: 10px; color: #fff; cursor: pointer; margin-top: 12px; }
+  .row2 { display: flex; gap: 8px; }
+  .row2 input { flex: 1; }
+  .row2 button { padding: 0 18px; border: none; border-radius: 10px; background: #2f6fed;
+                 color: #fff; font-size: 15px; cursor: pointer; white-space: nowrap; }
+  .msg { text-align: center; margin-top: 10px; font-size: 15px; min-height: 22px; }
+  .msg.ok { color: #1d8a4c; font-weight: 600; }
+  .msg.err { color: #d33; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14px; }
+  .pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 10px 0 4px; font-size: 14px; color: #555; }
+  .pager button { padding: 6px 14px; border: 1px solid #d5dbe7; border-radius: 8px; background: #fff; cursor: pointer; font-size: 14px; }
+  .pager button:disabled { opacity: 0.4; cursor: default; }
+  th, td { padding: 9px 6px; border-bottom: 1px solid #eee; text-align: left; }
+  th { color: #666; font-weight: 600; background: #f7f9fc; }
+  .tag-in { color: #1d8a4c; font-weight: 600; }
+  .tag-out { color: #d97a10; font-weight: 600; }
+  .loc-cell { font-size: 12px; color: #555; max-width: 170px; overflow-wrap: anywhere; }
+  .mini-btn { padding: 8px 12px; border: none; border-radius: 8px; background: #eef2f9;
+              color: #1f3a6e; font-size: 14px; cursor: pointer; white-space: nowrap; }
+  .mini-btn:active { background: #d7e2f7; }
+  .hint { font-size: 13px; color: #888; margin-top: 12px; line-height: 1.7; }
+  .warn { background: #fff3cd; border: 1px solid #f0d57a; border-radius: 10px;
+          padding: 12px; font-size: 14px; margin-bottom: 12px; }
+  .back { display: block; text-align: center; margin-top: 16px; font-size: 14px; color: #2f6fed; }
+  /* 3 main buttons */
+  .menu { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+  .menu button { padding: 18px; font-size: 17px; font-weight: 700; border: none;
+                 border-radius: 12px; cursor: pointer; background: #eef2f9; color: #1f3a6e; }
+  .menu button.active { background: #2f6fed; color: #fff; }
+  .panel { margin-top: 6px; }
+  /* searchable employee picker */
+  .picker { position: relative; }
+  .picker-row { display: flex; gap: 8px; }
+  .picker-row input { flex: 1; min-width: 0; }
+  .dropbtn { flex: 0 0 auto; padding: 10px 14px; font-size: 16px; }
+  .suggest { position: absolute; top: 100%; left: 0; right: 0; background: #fff;
+             border: 1px solid #d5dbe7; border-top: none; border-radius: 0 0 10px 10px;
+             max-height: 220px; overflow-y: auto; z-index: 10;
+             box-shadow: 0 6px 16px rgba(0,0,0,.08); }
+  .suggest button { display: block; width: 100%; text-align: left; padding: 12px;
+                    border: none; background: #fff; font-size: 15px; cursor: pointer;
+                    border-bottom: 1px solid #f0f0f0; }
+  .suggest button:hover, .suggest button:active { background: #eef3ff; }
+  .sug-empty { padding: 12px; color: #999; font-size: 14px; }
+  .picked { font-size: 14px; color: #1d8a4c; font-weight: 600; margin-top: 6px; min-height: 20px; }
+</style>
+</head>
+<body>
+
+<div class="logo-wrap"><img src="logo.png" alt="Wiwynn" class="logo"></div>
+<h1>🔐 Admin - Attendance System</h1>
+<div id="cfgWarn" class="warn hidden">⚠️ Database connection not configured. Please complete the setup in README.</div>
+
+<div class="card">
+  <div id="adminGate">
+    <label>Admin PIN</label>
+    <div class="row2">
+      <input id="adminPin" type="password" placeholder="Enter admin PIN" onkeydown="if(event.key==='Enter')loadAdmin()">
+      <button onclick="loadAdmin()">Login</button>
+    </div>
+    <div class="msg" id="adminMsg"></div>
+  </div>
+
+  <div id="adminBody" class="hidden">
+    <div class="menu">
+      <button id="btn-addEmp" onclick="showPanel('addEmp')">➕ Add Employee</button>
+      <button id="btn-editEmp" onclick="showPanel('editEmp')">✏️ Edit Employee</button>
+      <button id="btn-backfill" onclick="showPanel('backfill')">🕐 Backfill Record</button>
+      <button id="btn-records" onclick="showPanel('records')">📋 Check All Records</button>
+      <button id="btn-location" onclick="showPanel('location')">📍 Out-of-Range Check-ins</button>
+    </div>
+    <div class="msg" id="adminMsg2"></div>
+
+    <div id="panel-addEmp" class="panel hidden">
+      <label>Staff ID</label>
+      <input id="newStaffId" placeholder="Staff ID, e.g. YM1234567" autocapitalize="characters">
+      <label>Name</label>
+      <input id="newName" placeholder="Name">
+      <label>Labor Type</label>
+      <div class="row2">
+        <select id="newLaborType">
+          <option value="">Select type</option>
+          <option value="IDL">IDL</option>
+          <option value="DL">DL</option>
+        </select>
+        <button onclick="addEmployee()">Add</button>
+      </div>
+    </div>
+
+    <div id="panel-editEmp" class="panel hidden">
+      <label>Employee (type to search, or tap ▼ to pick)</label>
+      <div class="picker">
+        <div class="picker-row">
+          <input id="editSearch" placeholder="Type name or staff ID…" autocomplete="off">
+          <button type="button" class="dropbtn" id="editDrop" aria-label="Select employee">▼</button>
+          <button type="button" class="dropbtn" id="editClear" aria-label="Clear selection">✕</button>
+        </div>
+        <div id="editSuggest" class="suggest hidden"></div>
+      </div>
+      <div class="picked" id="editPickedLine"></div>
+      <div id="editForm" class="hidden">
+        <label>Staff ID</label>
+        <input id="editStaffId" autocapitalize="characters">
+        <label>Name</label>
+        <input id="editName">
+        <label>Labor Type</label>
+        <select id="editLaborType">
+          <option value="">Select type</option>
+          <option value="IDL">IDL</option>
+          <option value="DL">DL</option>
+        </select>
+        <label>Status</label>
+        <div class="row2">
+          <select id="editActive">
+            <option value="true">Active</option>
+            <option value="false">Inactive</option>
+          </select>
+          <button onclick="saveEmployee()">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="panel-backfill" class="panel hidden">
+      <label>Employee (type to search, or tap ▼ to pick)</label>
+      <div class="picker">
+        <div class="picker-row">
+          <input id="empSearch" placeholder="Type name or staff ID…" autocomplete="off">
+          <button type="button" class="dropbtn" id="empDrop" aria-label="Select employee">▼</button>
+          <button type="button" class="dropbtn" id="empClear" aria-label="Clear selection">✕</button>
+        </div>
+        <div id="empSuggest" class="suggest hidden"></div>
+      </div>
+      <div class="picked" id="pickedLine"></div>
+      <label>Date &amp; Time</label>
+      <div class="row2">
+        <select id="fixAction" style="max-width:110px">
+          <option value="in">Clock In</option>
+          <option value="out">Clock Out</option>
+        </select>
+        <input id="fixTime" type="datetime-local">
+        <button onclick="addRecord()">Add</button>
+      </div>
+    </div>
+
+    <div id="panel-records" class="panel hidden">
+      <label>Search records</label>
+      <div class="picker">
+        <div class="picker-row">
+          <input id="recSearch" placeholder="Type name or staff ID to filter…" autocomplete="off">
+          <button type="button" class="dropbtn" id="recDrop" aria-label="Select employee">▼</button>
+          <button type="button" class="dropbtn" id="recClear" aria-label="Clear search">✕</button>
+        </div>
+        <div id="recSuggest" class="suggest hidden"></div>
+      </div>
+      <div class="picker-row" style="margin-top:8px">
+        <input type="date" id="recDate" aria-label="Filter by date">
+        <button type="button" class="dropbtn" id="recDateClear" aria-label="Clear date">✕</button>
+      </div>
+      <table id="adminTable">
+        <thead><tr><th>DL/IDL</th><th>ID</th><th>Name</th><th>Type</th><th>Time</th><th>Location</th></tr></thead><tbody></tbody>
+      </table>
+      <div id="recPager" class="pager"></div>
+      <label style="margin-top:12px">Export list: pick a date or range</label>
+      <div class="row2">
+        <input type="date" id="listFrom">
+        <input type="date" id="listTo">
+        <button class="btn-blue" onclick="exportExcel()">⬇ Export</button>
+      </div>
+      <label style="margin-top:12px">Dashboard month</label>
+      <div class="row2">
+        <input type="month" id="dashMonth">
+        <button class="btn-blue" onclick="exportDashboard()">⬇ Export Dashboard (Excel)</button>
+      </div>
+      <label style="margin-top:12px">Email dashboard to</label>
+      <div class="row2">
+        <input type="email" id="dashEmail" placeholder="name@company.com" autocomplete="off">
+        <button onclick="sendDashboard()">✉ Send</button>
+      </div>
+      <div class="msg" id="dashMsg"></div>
+    </div>
+
+    <div id="panel-location" class="panel hidden">
+      <div id="locInfo" class="hint">Loading company location…</div>
+      <div id="oorEditForm" class="hidden">
+        <label>Correct location for</label>
+        <div class="picked" id="oorEditWho"></div>
+        <label>Latitude</label>
+        <input id="oorEditLat" type="number" step="any" placeholder="e.g. 3.1390">
+        <label>Longitude</label>
+        <input id="oorEditLng" type="number" step="any" placeholder="e.g. 101.6869">
+        <div class="row2" style="margin-top:12px">
+          <button class="btn-blue" onclick="oorUseCompanyLocation()">📍 Use company location</button>
+        </div>
+        <div class="row2">
+          <button class="btn-blue" onclick="oorSaveLocation()">💾 Save</button>
+          <button class="btn-blue" onclick="oorCancelEdit()" style="background:#8a94a6">Cancel</button>
+        </div>
+      </div>
+      <div class="msg" id="locMsg"></div>
+      <label style="margin-top:14px">Check-ins outside the 5 km radius</label>
+      <table id="oorTable">
+        <thead><tr><th>DL/IDL</th><th>ID</th><th>Name</th><th>Type</th><th>Time</th><th>Distance</th><th>Location</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="row2" style="margin-top:12px">
+        <button class="btn-blue" onclick="exportOutOfRange()">⬇ Export Out-of-Range (Excel)</button>
+      </div>
+      <div class="hint">💡 Records without a location (e.g. GPS permission denied) are treated as out of range. Backfilled records are not listed here. Use ✏️ Edit to set a record's location.</div>
+    </div>
+  </div>
+  <div class="hint">💡 The monthly report is generated automatically on the 1st of each month and emailed. You can also trigger it manually in GitHub Actions.</div>
+</div>
+
+<a class="back" href="index.html">← Back to clock-in page</a>
+
+<script src="supabase.min.js?v=20261005a"></script>
+<script src="xlsx.full.min.js?v=20261005"></script>
+<script src="exceljs.min.js?v=20261005"></script>
+<script src="config.js?v=20261005a"></script>
+<script>
+const CFG = window.APP_CONFIG || {};
+const TZ = 'Asia/Kuala_Lumpur';
+let sb = null;
+let employees = [];
+let selectedEmpId = null;
+let adminData = [];
+
+function showWarn(text) {
+  const w = document.getElementById('cfgWarn');
+  if (text) w.textContent = text;
+  w.classList.remove('hidden');
+}
+function hideWarn() {
+  document.getElementById('cfgWarn').classList.add('hidden');
+}
+function cfgOk() {
+  return !!(CFG.SUPABASE_URL && !CFG.SUPABASE_URL.includes('your-project'));
+}
+(function initDb() {
+  if (!cfgOk()) { showWarn(); return; }
+  try {
+    sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
+    hideWarn();
+  } catch (e) {
+    showWarn('⚠️ Failed to start the database library. Please refresh the page.');
+  }
+})();
+
+function fmt(ts) {
+  return new Date(ts).toLocaleString('en-GB', { timeZone: TZ, hour12: false });
+}
+function say(el, text, ok) {
+  const m = document.getElementById(el);
+  m.textContent = text;
+  m.className = 'msg ' + (ok === true ? 'ok' : ok === false ? 'err' : '');
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function typeLabel(action) {
+  return action === 'in' ? 'Clock In' : 'Clock Out';
+}
+
+// Switch between the 5 panels
+function showPanel(name) {
+  ['addEmp', 'editEmp', 'backfill', 'records', 'location'].forEach(p => {
+    document.getElementById('panel-' + p).classList.toggle('hidden', p !== name);
+    document.getElementById('btn-' + p).classList.toggle('active', p === name);
+  });
+  if (name === 'location') loadLocationPanel();
+}
+
+// Employee list for pickers: via admin RPC (includes inactive + labor type)
+async function fetchEmployees() {
+  if (!sb) return;
+  try {
+    const pin = document.getElementById('adminPin').value.trim();
+    const { data, error } = await sb.rpc('admin_list_employees', { p_admin_pin: pin });
+    if (error) throw error;
+    if (data.ok) employees = data.employees || [];
+  } catch (e) { /* shown on use */ }
+}
+
+// Searchable employee picker: type to filter, click to select
+const empSearch = document.getElementById('empSearch');
+const empSuggest = document.getElementById('empSuggest');
+const pickedLine = document.getElementById('pickedLine');
+
+function filterEmps(q) {
+  q = (q || '').trim().toLowerCase();
+  if (!q) return employees.slice();
+  return employees.filter(e =>
+    ((e.staff_id || '') + ' ' + e.name).toLowerCase().includes(q)
+  );
+}
+function renderEmpSuggest(hits) {
+  if (!hits.length) {
+    empSuggest.innerHTML = '<div class="sug-empty">No match</div>';
+  } else {
+    empSuggest.innerHTML = hits.map(e =>
+      `<button type="button" data-id="${e.id}" data-label="${escapeHtml((e.staff_id || 'No ID') + ' - ' + e.name)}">${escapeHtml((e.staff_id || 'No ID') + ' - ' + e.name)}</button>`
+    ).join('');
+    empSuggest.querySelectorAll('button').forEach(b =>
+      b.addEventListener('click', () => {
+        selectedEmpId = +b.dataset.id;
+        empSearch.value = b.dataset.label;
+        pickedLine.textContent = '✓ Selected: ' + b.dataset.label;
+        empSuggest.classList.add('hidden');
+      })
+    );
+  }
+  empSuggest.classList.remove('hidden');
+}
+empSearch.addEventListener('input', () => {
+  selectedEmpId = null;
+  pickedLine.textContent = '';
+  const q = empSearch.value.trim();
+  if (!q) { empSuggest.classList.add('hidden'); return; }
+  renderEmpSuggest(filterEmps(q).slice(0, 8));
+});
+document.getElementById('empDrop').addEventListener('click', () => {
+  if (!empSuggest.classList.contains('hidden')) { empSuggest.classList.add('hidden'); return; }
+  renderEmpSuggest(filterEmps(empSearch.value).slice(0, 50));
+});
+document.getElementById('empClear').addEventListener('click', () => {
+  empSearch.value = '';
+  selectedEmpId = null;
+  pickedLine.textContent = '';
+  empSuggest.classList.add('hidden');
+});
+empSearch.addEventListener('keydown', e => {
+  if (e.key === 'Escape') empSuggest.classList.add('hidden');
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.picker')) empSuggest.classList.add('hidden');
+});
+
+// ---- Edit Employee: searchable picker (includes inactive) ----
+let editEmpId = null;
+const editSearch = document.getElementById('editSearch');
+const editSuggest = document.getElementById('editSuggest');
+const editPickedLine = document.getElementById('editPickedLine');
+
+function empLabel(e) {
+  const base = (e.staff_id || 'No ID') + ' - ' + e.name;
+  return e.active ? base : base + ' (inactive)';
+}
+
+function renderEditSuggest(hits) {
+  if (!hits.length) {
+    editSuggest.innerHTML = '<div class="sug-empty">No match</div>';
+  } else {
+    editSuggest.innerHTML = hits.map(e =>
+      `<button type="button" data-id="${e.id}">${escapeHtml(empLabel(e))}</button>`
+    ).join('');
+    editSuggest.querySelectorAll('button').forEach(b =>
+      b.addEventListener('click', () => {
+        const emp = employees.find(x => x.id === +b.dataset.id);
+        if (!emp) return;
+        editEmpId = emp.id;
+        editSearch.value = empLabel(emp);
+        editPickedLine.textContent = '✓ Selected: ' + empLabel(emp);
+        editSuggest.classList.add('hidden');
+        // pre-fill form
+        document.getElementById('editStaffId').value = emp.staff_id || '';
+        document.getElementById('editName').value = emp.name || '';
+        document.getElementById('editLaborType').value = emp.labor_type || '';
+        document.getElementById('editActive').value = emp.active ? 'true' : 'false';
+        document.getElementById('editForm').classList.remove('hidden');
+      })
+    );
+  }
+  editSuggest.classList.remove('hidden');
+}
+editSearch.addEventListener('input', () => {
+  editEmpId = null;
+  editPickedLine.textContent = '';
+  document.getElementById('editForm').classList.add('hidden');
+  const q = editSearch.value.trim();
+  if (!q) { editSuggest.classList.add('hidden'); return; }
+  renderEditSuggest(filterEmps(q).slice(0, 8));
+});
+document.getElementById('editDrop').addEventListener('click', () => {
+  if (!editSuggest.classList.contains('hidden')) { editSuggest.classList.add('hidden'); return; }
+  renderEditSuggest(filterEmps(editSearch.value).slice(0, 50));
+});
+document.getElementById('editClear').addEventListener('click', () => {
+  editSearch.value = '';
+  editEmpId = null;
+  editPickedLine.textContent = '';
+  editSuggest.classList.add('hidden');
+  document.getElementById('editForm').classList.add('hidden');
+});
+editSearch.addEventListener('keydown', e => {
+  if (e.key === 'Escape') editSuggest.classList.add('hidden');
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.picker')) editSuggest.classList.add('hidden');
+});
+
+async function saveEmployee() {
+  if (!sb) return;
+  const pin = document.getElementById('adminPin').value.trim();
+  if (!editEmpId) { say('adminMsg2', '❌ Please search and select an employee', false); return; }
+  const staffId = document.getElementById('editStaffId').value.trim();
+  const name = document.getElementById('editName').value.trim();
+  if (!staffId) { say('adminMsg2', '❌ Please enter staff ID', false); return; }
+  if (!name) { say('adminMsg2', '❌ Please enter name', false); return; }
+  const { data, error } = await sb.rpc('admin_edit_employee', {
+    p_admin_pin: pin, p_emp_id: editEmpId, p_staff_id: staffId, p_name: name,
+    p_labor_type: document.getElementById('editLaborType').value,
+    p_active: document.getElementById('editActive').value === 'true'
+  });
+  if (error || !data.ok) { say('adminMsg2', '❌ ' + (data && data.msg || 'Network error'), false); return; }
+  say('adminMsg2', '✅ ' + data.msg, true);
+  await fetchEmployees();
+  // refresh the selected employee's displayed info
+  const emp = employees.find(x => x.id === editEmpId);
+  if (emp) {
+    editSearch.value = empLabel(emp);
+    editPickedLine.textContent = '✓ Selected: ' + empLabel(emp);
+  }
+}
+
+async function loadAdmin() {
+  if (!sb) return;
+  const pin = document.getElementById('adminPin').value.trim();
+  const { data, error } = await sb.rpc('admin_records', { p_admin_pin: pin, p_limit: 500 });
+  if (error || !data.ok) { say('adminMsg', '❌ ' + (data && data.msg || 'Network error'), false); return; }
+  say('adminMsg', '', null);
+  adminData = data.records;
+  recPage = 0;
+  document.getElementById('adminBody').classList.remove('hidden');
+  document.getElementById('adminGate').classList.add('hidden');
+  await fetchEmployees();
+  renderRecords();
+  showPanel('records');
+}
+
+// Records table with pagination (15 per page)
+const PAGE_SIZE = 15;
+let recPage = 0;
+
+const MYT_MS = 8 * 3600 * 1000; // Malaysia has no DST, fixed UTC+8
+function mytYmd(ts) {
+  const d = new Date(new Date(ts).getTime() + MYT_MS);
+  const p = n => String(n).padStart(2, '0');
+  return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate());
+}
+
+function filteredRecords() {
+  const q = document.getElementById('recSearch').value.trim().toLowerCase();
+  const dt = document.getElementById('recDate').value; // yyyy-mm-dd or ''
+  return adminData.filter(x => {
+    if (q && !(((x.staff_id || '') + ' ' + x.name).toLowerCase().includes(q))) return false;
+    if (dt && mytYmd(x.ts) !== dt) return false;
+    return true;
+  });
+}
+
+function clearRecSearch() {
+  document.getElementById('recSearch').value = '';
+  recSuggest.classList.add('hidden');
+  recPage = 0;
+  renderRecords();
+}
+function clearRecDate() {
+  document.getElementById('recDate').value = '';
+  recPage = 0;
+  renderRecords();
+}
+
+function renderRecords() {
+  const list = filteredRecords();
+  const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  if (recPage >= pages) recPage = pages - 1;
+  const slice = list.slice(recPage * PAGE_SIZE, recPage * PAGE_SIZE + PAGE_SIZE);
+  document.querySelector('#adminTable tbody').innerHTML = slice.map(x => {
+    let locCell = '—';
+    if (x.lat != null && x.lng != null) {
+      locCell = `<a href="${mapLink(x.lat, x.lng)}" target="_blank" rel="noopener">` +
+        `${fmtCoord(x.lat)}, ${fmtCoord(x.lng)}</a>`;
+    }
+    return `<tr><td>${escapeHtml(x.labor_type || '-')}</td><td>${escapeHtml(x.staff_id || '-')}</td>` +
+      `<td>${escapeHtml(x.name)}</td><td class="tag-${x.action}">${typeLabel(x.action)}</td>` +
+      `<td>${fmt(x.ts)}</td><td class="loc-cell">${locCell}</td></tr>`;
+  }).join('') || '<tr><td colspan="6">No records</td></tr>';
+  renderPager(list.length, pages);
+}
+
+function renderPager(total, pages) {
+  const el = document.getElementById('recPager');
+  if (pages <= 1) { el.innerHTML = total ? total + ' records' : ''; return; }
+  el.innerHTML =
+    `<button onclick="recGo(${recPage - 1})" ${recPage === 0 ? 'disabled' : ''}>‹ Prev</button>` +
+    `<span>Page ${recPage + 1} / ${pages} (${total} records)</span>` +
+    `<button onclick="recGo(${recPage + 1})" ${recPage === pages - 1 ? 'disabled' : ''}>Next ›</button>`;
+}
+
+function recGo(p) {
+  const pages = Math.max(1, Math.ceil(filteredRecords().length / PAGE_SIZE));
+  recPage = Math.min(Math.max(0, p), pages - 1);
+  renderRecords();
+  document.getElementById('panel-records').scrollIntoView({ block: 'start' });
+}
+document.getElementById('recSearch').addEventListener('input', () => { recPage = 0; renderRecords(); });
+document.getElementById('recDate').addEventListener('change', () => { recPage = 0; renderRecords(); });
+
+// Records search: ▼ dropdown to pick an employee without typing
+const recSuggest = document.getElementById('recSuggest');
+function renderRecSuggest(hits) {
+  if (!hits.length) {
+    recSuggest.innerHTML = '<div class="sug-empty">No match</div>';
+  } else {
+    recSuggest.innerHTML = hits.map(e => {
+      const label = (e.staff_id || 'No ID') + ' - ' + e.name;
+      const fval = e.staff_id || e.name; // filter value must match the haystack (no ' - ')
+      return `<button type="button" data-fval="${escapeHtml(fval)}">${escapeHtml(label)}</button>`;
+    }).join('');
+    recSuggest.querySelectorAll('button').forEach(b =>
+      b.addEventListener('click', () => {
+        document.getElementById('recSearch').value = b.dataset.fval;
+        recSuggest.classList.add('hidden');
+        recPage = 0;
+        renderRecords();
+      })
+    );
+  }
+  recSuggest.classList.remove('hidden');
+}
+document.getElementById('recDrop').addEventListener('click', () => {
+  if (!recSuggest.classList.contains('hidden')) { recSuggest.classList.add('hidden'); return; }
+  renderRecSuggest(filterEmps(document.getElementById('recSearch').value).slice(0, 50));
+});
+document.getElementById('recClear').addEventListener('click', clearRecSearch);
+document.getElementById('recDateClear').addEventListener('click', clearRecDate);
+document.getElementById('recSearch').addEventListener('keydown', e => {
+  if (e.key === 'Escape') recSuggest.classList.add('hidden');
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.picker')) recSuggest.classList.add('hidden');
+});
+
+async function addEmployee() {
+  if (!sb) return;
+  const pin = document.getElementById('adminPin').value.trim();
+  const staffId = document.getElementById('newStaffId').value.trim();
+  const name = document.getElementById('newName').value.trim();
+  const laborType = document.getElementById('newLaborType').value;
+  if (!staffId) { say('adminMsg2', '❌ Please enter staff ID', false); return; }
+  const { data, error } = await sb.rpc('admin_add_employee',
+    { p_admin_pin: pin, p_staff_id: staffId, p_name: name, p_emp_pin: '',
+      p_labor_type: laborType });
+  if (error || !data.ok) { say('adminMsg2', '❌ ' + (data && data.msg || 'Network error'), false); return; }
+  say('adminMsg2', '✅ ' + data.msg, true);
+  document.getElementById('newStaffId').value = '';
+  document.getElementById('newName').value = '';
+  document.getElementById('newLaborType').value = '';
+  fetchEmployees();
+}
+
+async function addRecord() {
+  if (!sb) return;
+  const pin = document.getElementById('adminPin').value.trim();
+  const action = document.getElementById('fixAction').value;
+  const t = document.getElementById('fixTime').value;
+  if (!selectedEmpId) { say('adminMsg2', '❌ Please search and select an employee', false); return; }
+  if (!t) { say('adminMsg2', '❌ Please select date & time', false); return; }
+  const iso = new Date(t).toISOString();
+  const { data, error } = await sb.rpc('admin_add_record',
+    { p_admin_pin: pin, p_emp_id: selectedEmpId, p_action: action, p_ts: iso });
+  if (error || !data.ok) { say('adminMsg2', '❌ ' + (data && data.msg || 'Network error'), false); return; }
+  say('adminMsg2', '✅ ' + data.msg, true);
+  document.getElementById('fixTime').value = '';
+  empSearch.value = '';
+  pickedLine.textContent = '';
+  selectedEmpId = null;
+  loadAdmin();
+}
+
+function exportExcel() {
+  return exportList();
+}
+
+// date or date-range export of raw records
+async function exportList() {
+  if (!sb) return;
+  const pin = document.getElementById('adminPin').value.trim();
+  let from = document.getElementById('listFrom').value; // YYYY-MM-DD
+  let to = document.getElementById('listTo').value;
+  if (!from && !to) { say('dashMsg', '❌ Please pick a date or range first', false); return; }
+  if (from && !to) to = from;
+  if (to && !from) from = to;
+  if (from > to) { const t = from; from = to; to = t; }
+
+  say('dashMsg', '⏳ Exporting…', true);
+  const { data, error } = await sb.rpc('admin_records', { p_admin_pin: pin, p_limit: 10000 });
+  if (error || !data.ok) { say('dashMsg', '❌ ' + (data && data.msg || 'Network error'), false); return; }
+
+  const rows = [['DL/IDL','Staff ID','Name','Type','Time','Latitude','Longitude','Map Link']];
+  (data.records || []).forEach(x => {
+    if (!x.ts) return;
+    const local = new Date(new Date(x.ts).getTime() + 8 * 3600 * 1000); // UTC getters read MYT
+    const day = local.getUTCFullYear() + '-' +
+      String(local.getUTCMonth() + 1).padStart(2, '0') + '-' +
+      String(local.getUTCDate()).padStart(2, '0');
+    if (day < from || day > to) return;
+    const hasLoc = x.lat != null && x.lng != null;
+    rows.push([x.labor_type || '', x.staff_id || '', x.name, typeLabel(x.action), fmt(x.ts),
+      hasLoc ? x.lat : '', hasLoc ? x.lng : '', hasLoc ? mapLink(x.lat, x.lng) : '']);
+  });
+  if (rows.length === 1) { say('dashMsg', '❌ No records in this period', false); return; }
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:10},{wch:14},{wch:22},{wch:12},{wch:20},{wch:12},{wch:12},{wch:44}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+  const fname = from === to ? 'attendance-' + from : 'attendance-' + from + '_to_' + to;
+  XLSX.writeFile(wb, fname + '.xlsx');
+  say('dashMsg', '✅ Exported ' + (rows.length - 1) + ' records', true);
+}
+
+// ---- Dashboard export: same layout & rules as the monthly email report ----
+const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function fmtTime12(d) {
+  let h = d.getUTCHours();
+  const ap = h >= 12 ? 'PM' : 'AM';
+  h = h % 12; if (h === 0) h = 12;
+  const p2 = n => String(n).padStart(2, '0');
+  return h + ':' + p2(d.getUTCMinutes()) + ':' + p2(d.getUTCSeconds()) + ' ' + ap;
+}
+
+function buildDashboardData(records, year, month) {
+  const MYT = 8 * 3600 * 1000; // Malaysia has no DST, fixed UTC+8
+  const NIGHT_CUTOFF = 12; // clock-outs before this hour (MYT) may belong to previous day's night shift
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const perEmp = {};
+  employees.forEach(e => { if (e.staff_id) perEmp[e.staff_id] = { days: {} }; });
+  const myt = ts => new Date(new Date(ts).getTime() + MYT); // UTC getters now read MYT wall time
+  const inMonth = d => d.getUTCFullYear() === year && d.getUTCMonth() + 1 === month;
+
+  // pass 1: clock-ins use their own calendar day (earliest per day)
+  records.forEach(r => {
+    if (r.action !== 'in') return;
+    const bucket = perEmp[r.staff_id];
+    if (!bucket || !r.ts) return;
+    const local = myt(r.ts);
+    if (!inMonth(local)) return;
+    const key = local.getUTCDate();
+    const d = bucket.days[key] || (bucket.days[key] = { in: null, out: null });
+    if (!d.in || local < d.in) d.in = local;
+  });
+
+  // pass 2: clock-outs in chronological order, with night-shift attribution:
+  // an early-morning out belongs to the previous day if it has a clock-in but no clock-out yet
+  records
+    .filter(r => r.action === 'out' && perEmp[r.staff_id] && r.ts)
+    .sort((a, b) => new Date(a.ts) - new Date(b.ts))
+    .forEach(r => {
+      const bucket = perEmp[r.staff_id];
+      const local = myt(r.ts);
+      if (local.getUTCHours() < NIGHT_CUTOFF) {
+        const prev = new Date(local.getTime() - 86400000); // previous MYT day (no DST in MYT)
+        if (prev.getUTCFullYear() === year && prev.getUTCMonth() + 1 === month) {
+          const pb = bucket.days[prev.getUTCDate()];
+          if (pb && pb.in && !pb.out) { pb.out = local; return; }
+        }
+      }
+      if (!inMonth(local)) return;
+      const key = local.getUTCDate();
+      const d = bucket.days[key] || (bucket.days[key] = { in: null, out: null });
+      if (!d.out || local > d.out) d.out = local;
+    });
+  return employees.filter(e => e.staff_id).map(e => {
+    const info = perEmp[e.staff_id];
+    const cells = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      const d = info.days[day];
+      const cell = { in: 'NA', out: 'NA' };
+      if (d && d.in) {
+        cell.in = fmtTime12(d.in);
+        if (d.out && d.out > d.in) {
+          cell.out = fmtTime12(d.out);
+        }
+      }
+      cells.push(cell);
+    }
+    return {
+      staff_id: e.staff_id, name: e.name,
+      labor_type: e.labor_type || '',
+      cells: cells
+    };
+  });
+}
+
+async function buildDashboardXlsx(rows, year, month) {
+  const daysInMonth = rows.length ? rows[0].cells.length : new Date(year, month, 0).getDate();
+  const ncols = 3 + 4 * daysInMonth;
+  const title = 'Attendance Dashboard - ' +
+    new Date(year, month - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Dashboard');
+  ws.views = [{ state: 'frozen', xSplit: 3, ySplit: 2 }];
+
+  const thin = { style: 'thin', color: { argb: 'FFB0B0B0' } };
+  const border = { top: thin, left: thin, bottom: thin, right: thin };
+  const center = { horizontal: 'center', vertical: 'center', wrapText: true };
+  const hdrFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E79' } };
+  const hdrFont = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+  const labelFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF92D050' } };
+  const labelFont = { bold: true, size: 11 };
+
+  // title
+  ws.mergeCells(1, 1, 1, ncols);
+  const t = ws.getCell(1, 1);
+  t.value = title;
+  t.font = { bold: true, size: 14 };
+  t.alignment = { horizontal: 'center', vertical: 'center' };
+  ws.getRow(1).height = 30;
+
+  // headers
+  ['DL/IDL', 'Staff ID', 'Name'].forEach((h, i) => {
+    const c = ws.getCell(2, i + 1);
+    c.value = h; c.font = hdrFont; c.fill = hdrFill; c.alignment = center;
+  });
+  for (let d = 0; d < daysInMonth; d++) {
+    const col = 4 + d * 4;
+    ws.mergeCells(2, col, 2, col + 3);
+    const c = ws.getCell(2, col);
+    c.value = (d + 1) + '-' + MONTH_ABBR[month - 1];
+    c.font = hdrFont; c.fill = hdrFill; c.alignment = center;
+  }
+  ws.getRow(2).height = 22;
+
+  // data rows: [Clock In][time][Clock Out][time] per day, green labels
+  rows.forEach((r, ri) => {
+    const rowIdx = 3 + ri;
+    [r.labor_type || 'NA', r.staff_id, r.name].forEach((v, i) => {
+      const c = ws.getCell(rowIdx, i + 1);
+      c.value = v; c.alignment = center;
+    });
+    r.cells.forEach((cell, d) => {
+      const col = 4 + d * 4;
+      const hasIn = cell.in !== 'NA';
+      const vals = hasIn ? ['Clock In', cell.in, 'Clock Out', cell.out] : ['NA', 'NA', 'NA', 'NA'];
+      vals.forEach((v, j) => {
+        const c = ws.getCell(rowIdx, col + j);
+        c.value = v; c.alignment = center;
+        if (hasIn && (j === 0 || j === 2)) { c.fill = labelFill; c.font = labelFont; }
+      });
+    });
+  });
+
+  // borders on every cell
+  const lastRow = 2 + rows.length;
+  for (let rr = 1; rr <= lastRow; rr++)
+    for (let cc = 1; cc <= ncols; cc++)
+      ws.getCell(rr, cc).border = border;
+
+  // widths
+  ws.getColumn(1).width = 10;
+  ws.getColumn(2).width = 14;
+  ws.getColumn(3).width = 22;
+  for (let d = 0; d < daysInMonth; d++)
+    [12, 14, 12, 14].forEach((w, j) => { ws.getColumn(4 + d * 4 + j).width = w; });
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const filename = 'dashboard-' + year + '-' + String(month).padStart(2, '0') + '.xlsx';
+  return { blob, filename };
+}
+
+async function writeDashboardXlsx(rows, year, month) {
+  const { blob, filename } = await buildDashboardXlsx(rows, year, month);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',')[1]);
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+}
+
+async function sendDashboard() {
+  if (!sb) return;
+  const pin = document.getElementById('adminPin').value.trim();
+  const to = document.getElementById('dashEmail').value.trim();
+  if (!to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+    say('dashMsg', '❌ Please enter a valid email address', false); return;
+  }
+  const mv = document.getElementById('dashMonth').value;
+  let year, month;
+  if (mv) { const p = mv.split('-'); year = +p[0]; month = +p[1]; }
+  else { const t = new Date(); year = t.getFullYear(); month = t.getMonth() + 1; }
+
+  say('dashMsg', '⏳ Generating and sending…', true);
+  try {
+    const { data, error } = await sb.rpc('admin_records', { p_admin_pin: pin, p_limit: 10000 });
+    if (error || !data.ok) { say('dashMsg', '❌ ' + (data && data.msg || 'Network error'), false); return; }
+    const rows = buildDashboardData(data.records || [], year, month);
+    const { blob, filename } = await buildDashboardXlsx(rows, year, month);
+    const file_base64 = await blobToBase64(blob);
+    const resp = await fetch(CFG.SUPABASE_URL + '/functions/v1/send-dashboard', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': CFG.SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + CFG.SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({
+        pin,
+        to,
+        month: year + '-' + String(month).padStart(2, '0'),
+        filename,
+        file_base64,
+      }),
+    });
+    const out = await resp.json();
+    if (!resp.ok || !out.ok) { say('dashMsg', '❌ ' + (out.msg || 'Send failed'), false); return; }
+    say('dashMsg', '✅ Dashboard sent to ' + to, true);
+  } catch (e) {
+    say('dashMsg', '❌ ' + (e.message || 'Send failed'), false);
+  }
+}
+
+async function exportDashboard() {
+  if (!sb) return;
+  const pin = document.getElementById('adminPin').value.trim();
+  const mv = document.getElementById('dashMonth').value;
+  let year, month;
+  if (mv) { const p = mv.split('-'); year = +p[0]; month = +p[1]; }
+  else { const t = new Date(); year = t.getFullYear(); month = t.getMonth() + 1; }
+
+  say('dashMsg', '⏳ Generating dashboard…', true);
+  const { data, error } = await sb.rpc('admin_records', { p_admin_pin: pin, p_limit: 10000 });
+  if (error || !data.ok) { say('dashMsg', '❌ ' + (data && data.msg || 'Network error'), false); return; }
+  const rows = buildDashboardData(data.records || [], year, month);
+  await writeDashboardXlsx(rows, year, month);
+  say('dashMsg', '✅ Dashboard downloaded (' + rows.length + ' employees)', true);
+}
+
+// ---- Out-of-Range Check-ins ----
+let oorRecords = [];
+let companyLoc = null;
+
+async function loadLocationPanel() {
+  await refreshLocationInfo();
+  await loadOutOfRange();
+}
+
+async function refreshLocationInfo() {
+  const pin = document.getElementById('adminPin').value.trim();
+  const el = document.getElementById('locInfo');
+  try {
+    const { data, error } = await sb.rpc('admin_get_location', { p_admin_pin: pin });
+    if (error || !data.ok) { el.textContent = '⚠️ Could not load company location.'; return; }
+    if (data.lat == null || data.lng == null) {
+      companyLoc = null;
+      el.innerHTML = '⚠️ <b>Company location is not set.</b> ' +
+        'Check-ins cannot be checked against the 5 km radius until you set it below.';
+    } else {
+      companyLoc = { lat: data.lat, lng: data.lng };
+      const label = data.label ? escapeHtml(data.label) + ' — ' : '';
+      el.innerHTML = '📍 Company location: <b>' + label + data.lat + ', ' + data.lng +
+        '</b> (radius 5 km). ' +
+        `<a href="https://www.google.com/maps?q=${data.lat},${data.lng}" target="_blank" rel="noopener">View on map</a>`;
+    }
+  } catch (e) {
+    el.textContent = '⚠️ Could not load company location.';
+  }
+}
+
+let oorEditId = null;
+
+function oorStartEdit(i) {
+  const x = oorRecords[i];
+  if (!x) return;
+  oorEditId = x.id;
+  document.getElementById('oorEditWho').textContent =
+    (x.staff_id || '') + ' ' + x.name + ' — ' + typeLabel(x.action) + ' ' + fmt(x.ts);
+  document.getElementById('oorEditLat').value = (x.lat == null ? '' : x.lat);
+  document.getElementById('oorEditLng').value = (x.lng == null ? '' : x.lng);
+  document.getElementById('oorEditForm').classList.remove('hidden');
+  document.getElementById('panel-location').scrollIntoView({ block: 'start' });
+  say('locMsg', '', null);
+}
+function oorCancelEdit() {
+  oorEditId = null;
+  document.getElementById('oorEditForm').classList.add('hidden');
+}
+function oorUseCompanyLocation() {
+  if (!companyLoc) { say('locMsg', '❌ Company location not set', false); return; }
+  document.getElementById('oorEditLat').value = companyLoc.lat;
+  document.getElementById('oorEditLng').value = companyLoc.lng;
+  say('locMsg', '✅ Company location filled in — press Save', true);
+}
+async function oorSaveLocation() {
+  if (oorEditId == null) return;
+  const pin = document.getElementById('adminPin').value.trim();
+  const lat = parseFloat(document.getElementById('oorEditLat').value);
+  const lng = parseFloat(document.getElementById('oorEditLng').value);
+  if (!isFinite(lat) || !isFinite(lng)) {
+    say('locMsg', '❌ Please enter valid latitude and longitude', false); return;
+  }
+  const { data, error } = await sb.rpc('admin_update_record_location',
+    { p_admin_pin: pin, p_record_id: oorEditId, p_lat: lat, p_lng: lng });
+  if (error || !data.ok) { say('locMsg', '❌ ' + (data && data.msg || 'Network error'), false); return; }
+  say('locMsg', '✅ ' + data.msg, true);
+  oorCancelEdit();
+  await loadOutOfRange();
+}
+
+function mapLink(lat, lng) {
+  return 'https://www.google.com/maps?q=' + lat + ',' + lng;
+}
+function fmtCoord(n) {
+  return Number(n).toFixed(4);
+}
+
+async function loadOutOfRange() {
+  const pin = document.getElementById('adminPin').value.trim();
+  const tb = document.querySelector('#oorTable tbody');
+  tb.innerHTML = '<tr><td colspan="8">Loading…</td></tr>';
+  try {
+    const { data, error } = await sb.rpc('admin_out_of_range', { p_admin_pin: pin, p_limit: 500 });
+    if (error || !data.ok) {
+      tb.innerHTML = '<tr><td colspan="8">' + escapeHtml(data && data.msg || 'Network error') + '</td></tr>';
+      return;
+    }
+    oorRecords = data.records || [];
+    renderOOR();
+  } catch (e) {
+    tb.innerHTML = '<tr><td colspan="8">Network error</td></tr>';
+  }
+}
+
+function renderOOR() {
+  const tb = document.querySelector('#oorTable tbody');
+  if (!oorRecords.length) {
+    tb.innerHTML = '<tr><td colspan="8">No out-of-range check-ins 🎉</td></tr>';
+    return;
+  }
+  tb.innerHTML = oorRecords.map((x, i) => {
+    const distCell = (x.distance_km == null) ? 'no location' : x.distance_km + ' km';
+    const locCell = (x.lat == null || x.lng == null) ? '—' :
+      '<a href="' + mapLink(x.lat, x.lng) + '" target="_blank" rel="noopener">' +
+      fmtCoord(x.lat) + ', ' + fmtCoord(x.lng) + '</a>';
+    return '<tr><td>' + escapeHtml(x.labor_type || '-') + '</td><td>' + escapeHtml(x.staff_id || '-') + '</td>' +
+    '<td>' + escapeHtml(x.name) + '</td><td class="tag-' + x.action + '">' + typeLabel(x.action) + '</td>' +
+    '<td>' + fmt(x.ts) + '</td><td>' + distCell + '</td>' +
+    '<td class="loc-cell">' + locCell + '</td>' +
+    '<td><button class="mini-btn" onclick="oorStartEdit(' + i + ')">✏️ Edit</button></td></tr>';
+  }).join('');
+}
+
+async function exportOutOfRange() {
+  if (!oorRecords.length) { say('locMsg', '❌ No out-of-range records to export', false); return; }
+  say('locMsg', '⏳ Exporting…', true);
+  const rows = [['DL/IDL','Staff ID','Name','Type','Time','Distance (km)','Latitude','Longitude','Map Link']];
+  oorRecords.forEach(x => {
+    rows.push([x.labor_type || '', x.staff_id || '', x.name, typeLabel(x.action), fmt(x.ts),
+      x.distance_km, x.lat, x.lng, mapLink(x.lat, x.lng)]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:10},{wch:14},{wch:22},{wch:12},{wch:20},{wch:14},{wch:12},{wch:12},{wch:44}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'OutOfRange');
+  XLSX.writeFile(wb, 'out-of-range-' + new Date().toISOString().slice(0, 10) + '.xlsx');
+  say('locMsg', '✅ Exported ' + oorRecords.length + ' records', true);
+}
+
+// default dashboard month = current month
+(function () {
+  const t = new Date();
+  document.getElementById('dashMonth').value =
+    t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0');
+})();
+</script>
+<div class="footer">⚡ Powered by <a href="mailto:yiyang_soh@wiwynn.com">yiyang_soh@wiwynn.com</a> &amp; <a href="https://muse.ai" target="_blank" rel="noopener">Muse</a></div>
+</body>
+</html>

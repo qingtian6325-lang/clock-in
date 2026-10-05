@@ -1,0 +1,46 @@
+# Monthly attendance dashboard: runs on the 1st of each month at 08:30 (UTC+8);
+# generates the dashboard for the whole previous month and emails it.
+# Can also be triggered manually (for testing / re-sends).
+name: Monthly Attendance Dashboard
+
+on:
+  schedule:
+    - cron: '30 0 1 * *'   # 00:30 UTC on the 1st = 08:30 UTC+8 on the 1st
+  workflow_dispatch:
+    inputs:
+      month:
+        description: 'Month to report (YYYY-MM, leave empty to auto-generate last month)'
+        required: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install -r scripts/requirements.txt
+
+      - name: Generate and send attendance dashboard
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          REPORT_TO: ${{ secrets.REPORT_TO }}
+          REPORT_CC: ${{ secrets.REPORT_CC }}
+          APP_TZ: ${{ secrets.APP_TZ }}
+          REPORT_MONTH: ${{ inputs.month }}
+        run: python scripts/monthly_report.py
+
+      - name: Save dashboard file
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: attendance-dashboard
+          path: attendance-dashboard-*.xlsx
+          if-no-files-found: ignore

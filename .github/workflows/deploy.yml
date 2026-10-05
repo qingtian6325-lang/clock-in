@@ -1,0 +1,50 @@
+# Auto-deploy the website to GitHub Pages
+# On push to main, generates the frontend config from Secrets and publishes
+name: Deploy website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate frontend config (secrets never enter git)
+        run: |
+          cat > docs/config.js <<'EOF'
+          window.APP_CONFIG = {
+            SUPABASE_URL: "${{ secrets.SUPABASE_URL }}",
+            SUPABASE_ANON_KEY: "${{ secrets.SUPABASE_ANON_KEY }}",
+            WORK_START: "${{ secrets.WORK_START }}"
+          };
+          EOF
+          # sanity check: fail if any value is empty
+          grep -q '""' docs/config.js && { echo "A secret is empty, please check Secrets"; exit 1; } || true
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - id: deployment
+        uses: actions/deploy-pages@v5

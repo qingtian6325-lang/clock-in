@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attendance System</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+         --bg-img: url('bg.jpg');
+         background: linear-gradient(rgba(244,246,250,.9), rgba(244,246,250,.9)),
+                     var(--bg-img) center top / cover no-repeat fixed;
+         color: #222; max-width: 640px; margin: 0 auto; padding: 16px; min-height: 100vh; }
+  .footer { text-align: center; margin: 48px 0 12px; padding: 18px 14px;
+           font-size: 17px; font-weight: 800; color: #fff;
+           background: linear-gradient(135deg, #1565d8, #7b2ff7);
+           border-radius: 16px; box-shadow: 0 6px 18px rgba(80,60,200,.35); }
+  .footer a { color: #fff; }
+  .logo-wrap { text-align: center; margin: 10px 0 2px; }
+  .logo { max-width: 210px; height: auto; }
+  h1 { text-align: center; font-size: 22px; margin: 12px 0 4px; }
+  .clock { text-align: center; margin: 16px 0; }
+  .clock .time { font-size: 52px; font-weight: 700; letter-spacing: 2px; font-variant-numeric: tabular-nums; }
+  .clock .date { font-size: 15px; color: #666; margin-top: 4px; }
+  .card { background: #fff; border-radius: 14px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+  .hidden { display: none; }
+  label { display: block; font-size: 14px; color: #555; margin: 12px 0 6px; }
+  input { width: 100%; padding: 12px; font-size: 16px; border: 1px solid #d5dbe7;
+          border-radius: 10px; background: #fff; }
+  .btn-row { display: flex; gap: 12px; margin-top: 20px; }
+  .btn { flex: 1; padding: 20px 0; font-size: 20px; font-weight: 700; border: none;
+         border-radius: 14px; cursor: pointer; color: #fff; }
+  .btn-in { background: #22a35c; }
+  .btn-in:active { background: #1b8749; }
+  .btn-out { background: #f08c1d; }
+  .btn-out:active { background: #cf7412; }
+  .btn:disabled { opacity: 0.55; cursor: wait; }
+  .status { text-align: center; margin-top: 16px; font-size: 15px; color: #555; min-height: 22px; }
+  .msg { text-align: center; margin-top: 10px; font-size: 15px; min-height: 22px; }
+  .msg.ok { color: #1d8a4c; font-weight: 600; }
+  .msg.err { color: #d33; font-weight: 600; }
+  .name-line { text-align: center; font-size: 18px; font-weight: 700; margin-top: 10px; min-height: 26px; }
+  .name-line.ok { color: #1d8a4c; }
+  .name-line.err { color: #d33; font-size: 14px; font-weight: 400; }
+  .warn { background: #fff3cd; border: 1px solid #f0d57a; border-radius: 10px;
+          padding: 12px; font-size: 14px; margin-bottom: 12px; }
+  .foot { text-align: center; margin-top: 18px; }
+  .foot a { color: #b6bdc9; font-size: 12px; text-decoration: none; }
+  .clip-overlay { position: fixed; inset: 0; z-index: 9999; background: #000;
+                  display: flex; align-items: center; justify-content: center; }
+  .clip-overlay.hidden { display: none; }
+  .clip-overlay video { width: 100%; height: 100%; object-fit: contain; }
+  .clip-hint { position: absolute; bottom: 24px; width: 100%; text-align: center;
+               color: rgba(255,255,255,.6); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="logo-wrap"><img src="logo.png" alt="Wiwynn" class="logo"></div>
+<h1>📋 Attendance System</h1>
+<div class="clock">
+  <div class="time" id="time">--:--:--</div>
+  <div class="date" id="date"></div>
+</div>
+
+<div id="cfgWarn" class="warn hidden">⚠️ Database connection not configured. Please complete the setup in README.</div>
+
+<div class="card">
+  <label>Staff ID</label>
+  <input id="staffId" placeholder="Enter staff ID, e.g. YM1234567" autocomplete="off" autocapitalize="characters">
+  <div class="name-line" id="empNameLine">Enter your staff ID</div>
+  <div class="btn-row">
+    <button class="btn btn-in" id="btnIn" onclick="doClock('in')">Clock In</button>
+    <button class="btn btn-out" id="btnOut" onclick="doClock('out')">Clock Out</button>
+  </div>
+  <div class="status" id="status"></div>
+  <div class="msg" id="msg"></div>
+</div>
+
+<div class="foot"><a href="admin.html">admin</a></div>
+
+<!-- intro clip -->
+<div id="clipOverlay" class="clip-overlay hidden">
+  <video id="clipVideo" src="clip.mp4" playsinline preload="auto"></video>
+  <div class="clip-hint">tap to dismiss</div>
+</div>
+
+<script src="supabase.min.js?v=20261005a"></script>
+<script src="config.js?v=20261005a"></script>
+<script>
+const CFG = window.APP_CONFIG || {};
+const TZ = 'Asia/Kuala_Lumpur';
+// Staff ID -> custom background image (in docs/). Uppercase IDs.
+// Example: 'YM2608209': 'bg-jinghao.jpg',
+const STAFF_BG = {
+};
+// Staff IDs that trigger the intro clip (full-screen video, a few seconds)
+const CLIP_IDS = ['YM1234567'];
+let clipPlayedFor = '';
+
+function maybeClip(id) {
+  const uid = id.toUpperCase();
+  if (CLIP_IDS.includes(uid) && clipPlayedFor !== uid) {
+    clipPlayedFor = uid;
+    const ov = document.getElementById('clipOverlay');
+    const vid = document.getElementById('clipVideo');
+    ov.classList.remove('hidden');
+    vid.currentTime = 0;
+    vid.muted = false;
+    vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}); });
+  } else if (!CLIP_IDS.includes(uid)) {
+    clipPlayedFor = '';
+  }
+}
+function hideClip() {
+  document.getElementById('clipOverlay').classList.add('hidden');
+  const vid = document.getElementById('clipVideo');
+  vid.pause();
+}
+document.getElementById('clipVideo').addEventListener('ended', hideClip);
+document.getElementById('clipOverlay').addEventListener('click', hideClip);
+let sb = null;
+let currentEmpId = null;
+let lookupTimer = null;
+
+function showWarn(text) {
+  const w = document.getElementById('cfgWarn');
+  if (text) w.textContent = text;
+  w.classList.remove('hidden');
+}
+function hideWarn() {
+  document.getElementById('cfgWarn').classList.add('hidden');
+}
+function cfgOk() {
+  return !!(CFG.SUPABASE_URL && !CFG.SUPABASE_URL.includes('your-project'));
+}
+
+// DB init is wrapped so the live clock keeps running even if it fails
+(function initDb() {
+  if (!cfgOk()) { showWarn(); return; }  // default text = not configured
+  try {
+    sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
+    hideWarn();
+  } catch (e) {
+    showWarn('⚠️ Failed to start the database library. Please refresh the page.');
+  }
+})();
+
+// Live clock
+function tick() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  document.getElementById('time').textContent = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  document.getElementById('date').textContent =
+    d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+setInterval(tick, 1000); tick();
+
+function fmt(ts) {
+  return new Date(ts).toLocaleString('en-GB', { timeZone: TZ, hour12: false });
+}
+
+function say(text, ok) {
+  const m = document.getElementById('msg');
+  m.textContent = text;
+  m.className = 'msg ' + (ok === true ? 'ok' : ok === false ? 'err' : '');
+}
+
+// Type staff ID -> name appears automatically (debounced 500ms)
+document.getElementById('staffId').addEventListener('input', () => {
+  clearTimeout(lookupTimer);
+  currentEmpId = null;
+  const v = document.getElementById('staffId').value.trim();
+  // custom background for specific staff IDs (empty/no match -> default)
+  const bg = STAFF_BG[v.toUpperCase()];
+  document.body.style.setProperty('--bg-img', bg ? `url('${bg}')` : `url('bg.jpg')`);
+  maybeClip(v);
+  const line = document.getElementById('empNameLine');
+  line.className = 'name-line';
+  if (!v) { line.textContent = 'Enter your staff ID'; updateStatus(); return; }
+  line.textContent = 'Searching…';
+  lookupTimer = setTimeout(() => lookupEmployee(v), 500);
+});
+
+async function lookupEmployee(staffId) {
+  const line = document.getElementById('empNameLine');
+  try {
+    const { data, error } = await sb.rpc('lookup_employee', { p_staff_id: staffId });
+    if (error) throw error;
+    if (!data.ok) {
+      line.textContent = '❌ ' + data.msg;
+      line.className = 'name-line err';
+      currentEmpId = null;
+    } else {
+      line.textContent = '👤 ' + data.name;
+      line.className = 'name-line ok';
+      currentEmpId = data.id;
+    }
+  } catch (e) {
+    line.textContent = '❌ Lookup failed, please check your connection';
+    line.className = 'name-line err';
+    currentEmpId = null;
+  }
+  updateStatus();
+}
+
+async function doClock(action) {
+  if (!sb) return;
+  if (!currentEmpId) { say('Please enter a valid staff ID first', false); return; }
+  setClockBusy(true);
+  say('📍 Getting your location…', null);
+  const loc = await getPosition();
+  const { data, error } = await sb.rpc('clock',
+    { p_emp_id: currentEmpId, p_action: action,
+      p_lat: loc ? loc.lat : null, p_lng: loc ? loc.lng : null });
+  setClockBusy(false);
+  if (error) { say('❌ Network error, please try again', false); return; }
+  let text = (data.ok ? '✅ ' : '❌ ') + data.msg + (data.ts ? ` (${fmt(data.ts)})` : '');
+  if (data.ok && !loc) text += ' — ⚠️ location not captured';
+  say(text, data.ok);
+  updateStatus();
+}
+
+function setClockBusy(busy) {
+  document.getElementById('btnIn').disabled = busy;
+  document.getElementById('btnOut').disabled = busy;
+}
+
+// GPS position for the clock record (null if unavailable/denied)
+function getPosition() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) { resolve(null); return; }
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; clearTimeout(timer); resolve(v); } };
+    const timer = setTimeout(() => finish(null), 10000);
+    navigator.geolocation.getCurrentPosition(
+      pos => finish({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => finish(null),
+      { enableHighAccuracy: true, timeout: 9000, maximumAge: 60000 }
+    );
+  });
+}
+
+async function updateStatus() {
+  if (!sb) return;
+  const s = document.getElementById('status');
+  if (!currentEmpId) { s.textContent = ''; return; }
+  const { data } = await sb.rpc('my_records', { p_emp_id: currentEmpId });
+  const last = data && data[0];
+  if (!last) s.textContent = 'Not clocked in yet today';
+  else if (last.action === 'in') s.textContent = `🟢 Clocked in at ${fmt(last.ts)}`;
+  else s.textContent = `🔵 Clocked out at ${fmt(last.ts)}`;
+}
+</script>
+<div class="footer">⚡ Powered by <a href="mailto:yiyang_soh@wiwynn.com">yiyang_soh@wiwynn.com</a> &amp; <a href="https://muse.ai" target="_blank" rel="noopener">Muse</a></div>
+</body>
+</html>
