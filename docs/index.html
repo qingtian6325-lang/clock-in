@@ -1,60 +1,360 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Attendance System</title>
 <link rel="icon" type="image/png" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
+  :root {
+    --primary: #2563eb;
+    --primary-glow: rgba(37, 99, 235, 0.28);
+    --success: #10b981;
+    --success-glow: rgba(16, 185, 129, 0.28);
+    --warning: #f59e0b;
+    --warning-glow: rgba(245, 158, 11, 0.28);
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --surface: rgba(255, 255, 255, 0.88);
+    --surface-border: rgba(255, 255, 255, 0.95);
+    --radius-lg: 24px;
+    --radius-md: 16px;
+    --radius-sm: 12px;
+    --shadow-soft: 0 16px 36px -8px rgba(15, 23, 42, 0.08), 0 4px 12px -2px rgba(15, 23, 42, 0.03);
+  }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
-         --bg-img: url('bg.jpg');
-         background: linear-gradient(rgba(244,246,250,.9), rgba(244,246,250,.9)),
-                     var(--bg-img) center top / cover no-repeat fixed;
-         color: #222; max-width: 640px; margin: 0 auto; padding: 16px; min-height: 100vh; }
-  .footer { text-align: center; margin: 48px 0 12px; padding: 18px 14px;
-           font-size: 17px; font-weight: 800; color: #fff;
-           background: linear-gradient(135deg, #1565d8, #7b2ff7);
-           border-radius: 16px; box-shadow: 0 6px 18px rgba(80,60,200,.35); }
-  .footer a { color: #fff; }
-  .logo-wrap { text-align: center; margin: 10px 0 2px; }
-  .logo { max-width: 210px; height: auto; }
-  h1 { text-align: center; font-size: 22px; margin: 12px 0 4px; }
-  .clock { text-align: center; margin: 16px 0; }
-  .clock .time { font-size: 52px; font-weight: 700; letter-spacing: 2px; font-variant-numeric: tabular-nums; }
-  .clock .date { font-size: 15px; color: #666; margin-top: 4px; }
-  .card { background: #fff; border-radius: 14px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
-  .onsite { margin-top: 14px; }
-  .onsite-head { font-size: 16px; font-weight: 800; margin-bottom: 8px; }
-  .onsite-list { display: flex; flex-direction: column; gap: 6px; }
-  .onsite-row { display: flex; align-items: center; gap: 8px; font-size: 15px; }
-  .onsite-row .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; flex: none; }
-  .dim { color: #999; font-size: 14px; }
-  .hidden { display: none; }
-  label { display: block; font-size: 14px; color: #555; margin: 12px 0 6px; }
-  input { width: 100%; padding: 12px; font-size: 16px; border: 1px solid #d5dbe7;
-          border-radius: 10px; background: #fff; }
-  .btn-row { display: flex; gap: 12px; margin-top: 20px; }
-  .btn { flex: 1; padding: 20px 0; font-size: 20px; font-weight: 700; border: none;
-         border-radius: 14px; cursor: pointer; color: #fff; }
-  .btn-in { background: #22a35c; }
-  .btn-in:active { background: #1b8749; }
-  .btn-out { background: #f08c1d; }
-  .btn-out:active { background: #cf7412; }
-  .btn:disabled { opacity: 0.55; cursor: wait; }
-  .status { text-align: center; margin-top: 16px; font-size: 15px; color: #555; min-height: 22px; }
-  .msg { text-align: center; margin-top: 10px; font-size: 15px; min-height: 22px; }
-  .msg.ok { color: #1d8a4c; font-weight: 600; }
-  .msg.err { color: #d33; font-weight: 600; }
-  .name-line { text-align: center; font-size: 18px; font-weight: 700; margin-top: 10px; min-height: 26px; }
-  .name-line.ok { color: #1d8a4c; }
-  .name-line.err { color: #d33; font-size: 14px; font-weight: 400; }
-  .warn { background: #fff3cd; border: 1px solid #f0d57a; border-radius: 10px;
-          padding: 12px; font-size: 14px; margin-bottom: 12px; }
-  .foot { text-align: center; margin-top: 18px; }
-  .foot a { color: #b6bdc9; font-size: 12px; text-decoration: none; }
-  .clip-overlay { position: fixed; inset: 0; z-index: 9999; background: #000;
-                  display: flex; align-items: center; justify-content: center; }
+
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --bg-img: url('bg.jpg');
+    background: 
+      radial-gradient(circle at 10% 20%, rgba(37, 99, 235, 0.06) 0%, transparent 40%),
+      radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.06) 0%, transparent 40%),
+      linear-gradient(rgba(248, 250, 252, 0.92), rgba(248, 250, 252, 0.92)),
+      var(--bg-img) center top / cover no-repeat fixed;
+    color: var(--text-main);
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 24px 20px 36px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .logo-wrap {
+    text-align: center;
+    margin: 6px 0 14px;
+  }
+
+  .logo {
+    max-width: 190px;
+    height: auto;
+    filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.05));
+    transition: transform 0.3s ease;
+  }
+  .logo:hover {
+    transform: scale(1.02);
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: -0.2px;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .clock {
+    text-align: center;
+    margin: 0 0 24px;
+    padding: 16px 20px;
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--surface-border);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .clock .time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 54px;
+    font-weight: 700;
+    letter-spacing: -1.5px;
+    color: #0f172a;
+    line-height: 1.1;
+  }
+
+  .clock .date {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-top: 8px;
+    letter-spacing: 0.2px;
+  }
+
+  .card {
+    background: var(--surface);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: var(--radius-lg);
+    padding: 26px 22px;
+    border: 1px solid var(--surface-border);
+    box-shadow: var(--shadow-soft);
+  }
+
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  input {
+    width: 100%;
+    padding: 15px 18px;
+    font-size: 17px;
+    font-weight: 600;
+    border: 1.5px solid #e2e8f0;
+    border-radius: var(--radius-md);
+    background: #ffffff;
+    color: var(--text-main);
+    transition: all 0.2s ease;
+  }
+
+  input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px var(--primary-glow);
+  }
+
+  input::placeholder {
+    color: #94a3b8;
+    font-weight: 400;
+  }
+
+  .name-line {
+    text-align: center;
+    font-size: 15px;
+    font-weight: 600;
+    margin: 14px 0 18px;
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--text-muted);
+    transition: all 0.2s ease;
+  }
+
+  .name-line.ok {
+    color: #047857;
+    background: #ecfdf5;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-weight: 700;
+    display: inline-flex;
+    margin: 12px auto 16px;
+  }
+
+  .name-line.err {
+    color: #b91c1c;
+    background: #fef2f2;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 14px;
+    display: inline-flex;
+    margin: 12px auto 16px;
+  }
+
+  .btn-row {
+    display: flex;
+    gap: 12px;
+  }
+
+  .btn {
+    flex: 1;
+    padding: 18px 10px;
+    font-size: 18px;
+    font-weight: 700;
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .btn:active {
+    transform: scale(0.98);
+  }
+
+  .btn-in {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    box-shadow: 0 8px 18px -4px var(--success-glow);
+  }
+  .btn-in:hover:not(:disabled) {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    box-shadow: 0 10px 22px -4px var(--success-glow);
+  }
+
+  .btn-out {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    box-shadow: 0 8px 18px -4px var(--warning-glow);
+  }
+  .btn-out:hover:not(:disabled) {
+    background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+    box-shadow: 0 10px 22px -4px var(--warning-glow);
+  }
+
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    filter: grayscale(25%);
+    transform: none;
+  }
+
+  .status {
+    text-align: center;
+    margin-top: 14px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+    min-height: 22px;
+  }
+
+  .msg {
+    text-align: center;
+    margin-top: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    min-height: 24px;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    transition: all 0.25s ease;
+  }
+
+  .msg.ok {
+    color: #065f46;
+    background: #d1fae5;
+  }
+
+  .msg.err {
+    color: #991b1b;
+    background: #fee2e2;
+  }
+
+  .onsite {
+    margin-top: 18px;
+    padding: 22px 22px;
+  }
+
+  .onsite-head {
+    font-size: 15px;
+    font-weight: 800;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #1e293b;
+  }
+
+  .onsite-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .onsite-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #ffffff;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid #f1f5f9;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .onsite-row .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+    flex: none;
+  }
+
+  .dim { color: #94a3b8; font-size: 13px; font-weight: 500; }
+  .hidden { display: none !important; }
+
+  .warn {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #92400e;
+    border-radius: var(--radius-md);
+    padding: 12px;
+    font-size: 14px;
+    margin-bottom: 14px;
+  }
+
+  .foot {
+    text-align: center;
+    margin-top: 20px;
+  }
+
+  .foot a {
+    color: #94a3b8;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: color 0.2s ease;
+    padding: 6px 14px;
+    border-radius: 8px;
+  }
+  .foot a:hover {
+    color: var(--primary);
+    background: rgba(37, 99, 235, 0.06);
+  }
+
+  .footer {
+    text-align: center;
+    margin: 32px 0 8px;
+    padding: 16px 14px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffffff;
+    background: linear-gradient(135deg, #1e40af 0%, #6366f1 100%);
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 24px -4px rgba(99, 102, 241, 0.35);
+  }
+  .footer a { color: #ffffff; text-decoration: underline; text-underline-offset: 3px; }
+
+  .clip-overlay {
+    position: fixed; inset: 0; z-index: 9999; background: #000;
+    display: flex; align-items: center; justify-content: center;
+  }
   .clip-overlay.hidden { display: none; }
   .clip-overlay video { width: 100%; height: 100%; object-fit: contain; }
   .clip-hint { position: absolute; bottom: 24px; width: 100%; text-align: center;
@@ -74,7 +374,7 @@
 
 <div class="card">
   <label>Staff ID</label>
-  <input id="staffId" placeholder="Enter staff ID" autocomplete="off" autocapitalize="characters">
+  <input id="staffId" placeholder="Enter staff ID, e.g. YM1234567" autocomplete="off" autocapitalize="characters">
   <div class="name-line" id="empNameLine">Enter your staff ID</div>
   <div class="btn-row">
     <button class="btn btn-in" id="btnIn" onclick="doClock('in')">Clock In</button>
@@ -89,7 +389,7 @@
   <div id="onsiteList" class="onsite-list"><span class="dim">Loading…</span></div>
 </div>
 
-<div class="foot"><a href="admin.html">admin</a></div>
+<div class="foot"><a href="admin.html">⚙️ Management Console (Admin)</a></div>
 
 <!-- intro clip -->
 <div id="clipOverlay" class="clip-overlay hidden">
