@@ -61,10 +61,11 @@ security definer
 set search_path = public
 as $$
 declare
-  v_last  text;
-  v_ts    timestamptz;
-  v_label text;
-  v_past  text;
+  v_last     text;
+  v_last_ts  timestamptz;
+  v_ts       timestamptz;
+  v_label    text;
+  v_past     text;
 begin
   if p_action not in ('in', 'out') then
     return jsonb_build_object('ok', false, 'msg', 'Invalid action');
@@ -76,7 +77,7 @@ begin
     return jsonb_build_object('ok', false, 'msg', 'Employee not found or inactive');
   end if;
 
-  select r.action into v_last
+  select r.action, r.ts into v_last, v_last_ts
   from records r
   where r.employee_id = p_emp_id
   order by r.id desc limit 1;
@@ -84,7 +85,18 @@ begin
   v_label := case when p_action = 'in' then 'Clocked in' else 'Clocked out' end;
   v_past := case when p_action = 'in' then 'clocked in' else 'clocked out' end;
 
-  if v_last = p_action then
+  -- 14-hour auto-timeout & unblock:
+  -- If employee is clocking IN, but last punch was also IN from >14 hours ago,
+  -- auto-close the expired shift so today's clock-in can proceed without error.
+  if p_action = 'in' and v_last = 'in' then
+    if (now() - v_last_ts) > interval '14 hours' then
+      insert into records(employee_id, action, ts, note)
+      values (p_emp_id, 'out', v_last_ts + interval '14 hours', 'auto clock-out (14h limit)');
+      v_last := 'out';
+    else
+      return jsonb_build_object('ok', false, 'msg', 'You have already ' || v_past);
+    end if;
+  elsif v_last = p_action then
     return jsonb_build_object('ok', false, 'msg', 'You have already ' || v_past);
   end if;
 
@@ -246,6 +258,76 @@ begin
   insert into records(employee_id, action, ts, note)
   values (p_emp_id, p_action, v_ts, 'backfilled by admin');
   return jsonb_build_object('ok', true, 'msg', 'Backfill record added');
+end;
+$$;
+
+-- admin: delete a clock record (admin PIN verified server-side)
+create or replace function admin_delete_record(p_admin_pin text, p_record_id bigint)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_pin text;
+begin
+  select value into v_pin from settings where key = 'admin_pin';
+  if v_pin is null or p_admin_pin is distinct from v_pin then
+    return jsonb_build_object('ok', false, 'msg', 'Incorrect admin PIN');
+  end if;
+
+  if not exists (select 1 from records where id = p_record_id) then
+    return jsonb_build_object('ok', false, 'msg', 'Record not found');
+  end if;
+
+  delete from records where id = p_record_id;
+  return jsonb_build_object('ok', true, 'msg', 'Record deleted successfully');
+end;
+$$;
+
+-- admin: update a clock record action and/or timestamp (admin PIN verified server-side)
+create or replace function admin_update_record(
+  p_admin_pin text, p_record_id bigint, p_action text, p_ts text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_pin text;
+  v_ts  timestamptz;
+begin
+  select value into v_pin from settings where key = 'admin_pin';
+  if v_pin is null or p_admin_pin is distinct from v_pin then
+    return jsonb_build_object('ok', false, 'msg', 'Incorrect admin PIN');
+  end if;
+
+  if p_action not in ('in', 'out') then
+    return jsonb_build_object('ok', false, 'msg', 'Invalid action');
+  end if;
+
+  if not exists (select 1 from records where id = p_record_id) then
+    return jsonb_build_object('ok', false, 'msg', 'Record not found');
+  end if;
+
+  begin
+    v_ts := p_ts::timestamptz;
+  exception when others then
+    return jsonb_build_object('ok', false, 'msg', 'Invalid time format');
+  end;
+
+  update records
+  set action = p_action,
+      ts = v_ts,
+      note = case
+        when note is null or note = '' then 'edited by admin'
+        when note not like '%edited by admin%' then note || '; edited by admin'
+        else note
+      end
+  where id = p_record_id;
+
+  return jsonb_build_object('ok', true, 'msg', 'Record updated successfully');
 end;
 $$;
 
@@ -485,8 +567,10 @@ grant execute on function admin_get_location(text) to anon, authenticated;
 grant execute on function admin_set_location(text, double precision, double precision, text) to anon, authenticated;
 grant execute on function admin_out_of_range(text, int) to anon, authenticated;
 grant execute on function admin_update_record_location(text, bigint, double precision, double precision) to anon, authenticated;
+grant execute on function admin_delete_record(text, bigint) to anon, authenticated;
+grant execute on function admin_update_record(text, bigint, text, text) to anon, authenticated;
 
--- employees currently on-site: active employees whose latest record TODAY (MYT) is a clock-in.
+-- employees currently on-site: active employees whose latest record TODAY (MYT) is a clock-in within 14 hours.
 -- Public (no PIN): only names are exposed.
 create or replace function active_now()
 returns jsonb
@@ -508,6 +592,7 @@ as $$
       and r.action = 'in'
       and (r.ts at time zone 'Asia/Kuala_Lumpur')::date
         = (now() at time zone 'Asia/Kuala_Lumpur')::date
+      and (now() - r.ts) <= interval '14 hours'
   ) t;
 $$;
 grant execute on function active_now() to anon, authenticated;
