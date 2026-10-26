@@ -42,10 +42,9 @@ alter table employees enable row level security;
 alter table records enable row level security;
 alter table settings enable row level security;
 
--- employee directory: publicly readable (PIN not included)
+-- employee directory: table access is restricted by RLS (no direct public SELECT).
+-- Read access is strictly mediated through RPC functions (lookup_employee, active_now, admin_list_employees).
 drop policy if exists "employees list readable" on employees;
-create policy "employees list readable" on employees
-  for select using (active = true);
 
 -- clock in/out by employee id (no PIN; only checks the employee exists and is active)
 -- optionally records GPS coordinates sent by the clock-in page
@@ -571,16 +570,16 @@ grant execute on function admin_delete_record(text, bigint) to anon, authenticat
 grant execute on function admin_update_record(text, bigint, text, text) to anon, authenticated;
 
 -- employees currently on-site: active employees whose latest record TODAY (MYT) is a clock-in within 14 hours.
--- Public (no PIN): only names are exposed.
+-- Public (no PIN): only names are exposed (staff_id is omitted for privacy and security).
 create or replace function active_now()
 returns jsonb
 language sql
 security definer
 set search_path = public
 as $$
-  select coalesce(jsonb_agg(jsonb_build_object('staff_id', t.staff_id, 'name', t.name) order by t.name), '[]'::jsonb)
+  select coalesce(jsonb_agg(jsonb_build_object('name', t.name) order by t.name), '[]'::jsonb)
   from (
-    select e.staff_id, e.name
+    select e.name
     from employees e
     join lateral (
       select r.action, r.ts

@@ -36,11 +36,3 @@ jobs:
           APP_TZ: ${{ secrets.APP_TZ }}
           REPORT_MONTH: ${{ inputs.month }}
         run: python scripts/monthly_report.py
-
-      - name: Save dashboard file
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: attendance-dashboard
-          path: attendance-dashboard-*.xlsx
-          if-no-files-found: ignore
