@@ -129,7 +129,8 @@ begin
 end;
 $$;
 
--- clock history of a single employee
+-- latest clock record of a single employee (public; returns at most ONE record
+-- so anonymous callers cannot enumerate anyone's full attendance history)
 create or replace function my_records(p_emp_id bigint)
 returns jsonb
 language sql
@@ -137,10 +138,15 @@ security definer
 set search_path = public
 as $$
   select coalesce(
-    jsonb_agg(jsonb_build_object('action', action, 'ts', ts) order by id desc),
+    (select jsonb_agg(jsonb_build_object('action', r.action, 'ts', r.ts))
+     from (
+       select action, ts from records
+       where employee_id = p_emp_id
+       order by id desc
+       limit 1
+     ) r),
     '[]'::jsonb
-  )
-  from records where employee_id = p_emp_id;
+  );
 $$;
 
 -- admin: view all records (admin PIN verified server-side)
