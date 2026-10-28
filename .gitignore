@@ -2,3 +2,5 @@
 docs/config.js
 attendance-*.csv
 .DS_Store
+__pycache__/
+*.pyc

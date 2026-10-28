@@ -387,7 +387,7 @@
   <input id="staffId" placeholder="Enter staff ID, e.g. YM1234567" autocomplete="off" autocapitalize="characters">
   <div class="name-line" id="empNameLine">Enter your staff ID</div>
   <div id="forgetWarn" class="warn hidden" style="margin-top:12px; margin-bottom:4px; font-weight:600; text-align:left; font-size:13px; line-height:1.5;">
-    ⚠️ <b>考勤提醒</b>：你上次下班忘记打卡！系统已自动按 14 小时为你打卡下班。请尽快联系管理员修改为准确时间。
+    ⚠️ <b>Attendance Alert</b>: You forgot to clock out on your last shift! The system automatically clocked you out after 14 hours. Please contact an administrator to update your exact leaving time.
   </div>
   <div class="btn-row">
     <button class="btn btn-in" id="btnIn" onclick="doClock('in')">Clock In</button>
@@ -574,7 +574,7 @@ async function doClock(action) {
   let text = (data.ok ? '✅ ' : '❌ ') + data.msg + (data.ts ? ` (${fmt(data.ts)})` : '');
   if (LOCATION_ENABLED && data.ok && !loc) text += ' — ⚠️ location not captured';
   if (action === 'in' && lastWasAutoOut && data.ok) {
-    text += ' (⚠️ 上次忘记打卡，请记得联系管理员核对时间！)';
+    text += ' (⚠️ You forgot to clock out last time. Please contact admin to verify!)';
   }
   say(text, data.ok);
   updateStatus();
