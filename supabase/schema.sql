@@ -575,7 +575,7 @@ grant execute on function admin_update_record_location(text, bigint, double prec
 grant execute on function admin_delete_record(text, bigint) to anon, authenticated;
 grant execute on function admin_update_record(text, bigint, text, text) to anon, authenticated;
 
--- employees currently on-site: active employees whose latest record TODAY (MYT) is a clock-in within 14 hours.
+-- employees currently on-site: active employees whose latest record is a clock-in within 14 hours (supports cross-midnight night shifts).
 -- Public (no PIN): only names are exposed (staff_id is omitted for privacy and security).
 create or replace function active_now()
 returns jsonb
@@ -595,8 +595,6 @@ as $$
     ) r on true
     where e.active
       and r.action = 'in'
-      and (r.ts at time zone 'Asia/Kuala_Lumpur')::date
-        = (now() at time zone 'Asia/Kuala_Lumpur')::date
       and (now() - r.ts) <= interval '14 hours'
   ) t;
 $$;
