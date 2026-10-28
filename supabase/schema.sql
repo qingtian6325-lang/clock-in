@@ -46,6 +46,42 @@ alter table settings enable row level security;
 -- Read access is strictly mediated through RPC functions (lookup_employee, active_now, admin_list_employees).
 drop policy if exists "employees list readable" on employees;
 
+-- 14-hour auto-close mechanism for expired shifts:
+-- Clocks out any active employee whose latest record is 'in' from >14 hours ago.
+-- Timestamp is set to (in_ts + interval '14 hours') [Option A].
+create or replace function auto_clock_out_expired()
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_count int := 0;
+  r record;
+begin
+  for r in
+    select e.id as emp_id, lr.id as last_record_id, lr.ts as in_ts
+    from employees e
+    join lateral (
+      select id, action, ts
+      from records
+      where employee_id = e.id
+      order by id desc
+      limit 1
+    ) lr on true
+    where e.active
+      and lr.action = 'in'
+      and (now() - lr.ts) > interval '14 hours'
+  loop
+    insert into records(employee_id, action, ts, note)
+    values (r.emp_id, 'out', r.in_ts + interval '14 hours', 'auto clock-out (14h limit)');
+    v_count := v_count + 1;
+  end loop;
+
+  return v_count;
+end;
+$$;
+
 -- clock in/out by employee id (no PIN; only checks the employee exists and is active)
 -- optionally records GPS coordinates sent by the clock-in page
 drop function if exists clock(bigint, text, text);
@@ -76,6 +112,9 @@ begin
     return jsonb_build_object('ok', false, 'msg', 'Employee not found or inactive');
   end if;
 
+  -- Settle any expired shifts (>14h) across the board first
+  perform auto_clock_out_expired();
+
   select r.action, r.ts into v_last, v_last_ts
   from records r
   where r.employee_id = p_emp_id
@@ -84,18 +123,7 @@ begin
   v_label := case when p_action = 'in' then 'Clocked in' else 'Clocked out' end;
   v_past := case when p_action = 'in' then 'clocked in' else 'clocked out' end;
 
-  -- 14-hour auto-timeout & unblock:
-  -- If employee is clocking IN, but last punch was also IN from >14 hours ago,
-  -- auto-close the expired shift so today's clock-in can proceed without error.
-  if p_action = 'in' and v_last = 'in' then
-    if (now() - v_last_ts) > interval '14 hours' then
-      insert into records(employee_id, action, ts, note)
-      values (p_emp_id, 'out', v_last_ts + interval '14 hours', 'auto clock-out (14h limit)');
-      v_last := 'out';
-    else
-      return jsonb_build_object('ok', false, 'msg', 'You have already ' || v_past);
-    end if;
-  elsif v_last = p_action then
+  if v_last = p_action then
     return jsonb_build_object('ok', false, 'msg', 'You have already ' || v_past);
   end if;
 
@@ -116,6 +144,9 @@ as $$
 declare
   v_rec record;
 begin
+  -- Settle any expired shifts (>14h) immediately when anyone types their staff ID
+  perform auto_clock_out_expired();
+
   select id, name into v_rec
   from employees
   where upper(staff_id) = upper(nullif(btrim(p_staff_id), ''))
@@ -138,9 +169,9 @@ security definer
 set search_path = public
 as $$
   select coalesce(
-    (select jsonb_agg(jsonb_build_object('action', r.action, 'ts', r.ts))
+    (select jsonb_agg(jsonb_build_object('action', r.action, 'ts', r.ts, 'note', coalesce(r.note, '')))
      from (
-       select action, ts from records
+       select action, ts, note from records
        where employee_id = p_emp_id
        order by id desc
        limit 1
@@ -170,7 +201,8 @@ begin
         'id', r.id, 'staff_id', e.staff_id, 'name', e.name,
         'labor_type', e.labor_type,
         'action', r.action, 'ts', r.ts,
-        'lat', r.lat, 'lng', r.lng
+        'lat', r.lat, 'lng', r.lng,
+        'note', coalesce(r.note, '')
       ) order by r.id desc), '[]'::jsonb)
     from (select * from records order by id desc limit p_limit) r
     join employees e on e.id = r.employee_id
@@ -576,29 +608,49 @@ grant execute on function admin_delete_record(text, bigint) to anon, authenticat
 grant execute on function admin_update_record(text, bigint, text, text) to anon, authenticated;
 
 -- employees currently on-site: active employees whose latest record is a clock-in within 14 hours (supports cross-midnight night shifts).
+-- Automatically runs auto_clock_out_expired() first so expired shifts are closed immediately.
 -- Public (no PIN): only names are exposed (staff_id is omitted for privacy and security).
 create or replace function active_now()
 returns jsonb
-language sql
+language plpgsql
 security definer
 set search_path = public
 as $$
-  select coalesce(jsonb_agg(jsonb_build_object('name', t.name) order by t.name), '[]'::jsonb)
-  from (
-    select e.name
-    from employees e
-    join lateral (
-      select r.action, r.ts
-      from records r
-      where r.employee_id = e.id
-      order by r.id desc limit 1
-    ) r on true
-    where e.active
-      and r.action = 'in'
-      and (now() - r.ts) <= interval '14 hours'
-  ) t;
+begin
+  perform auto_clock_out_expired();
+
+  return (
+    select coalesce(jsonb_agg(jsonb_build_object('name', t.name) order by t.name), '[]'::jsonb)
+    from (
+      select e.name
+      from employees e
+      join lateral (
+        select r.action, r.ts
+        from records r
+        where r.employee_id = e.id
+        order by r.id desc limit 1
+      ) r on true
+      where e.active
+        and r.action = 'in'
+        and (now() - r.ts) <= interval '14 hours'
+    ) t
+  );
+end;
 $$;
 grant execute on function active_now() to anon, authenticated;
+grant execute on function auto_clock_out_expired() to anon, authenticated;
+
+-- ============================================================
+-- Optional: Automated background cron (runs every 10 min)
+-- If pg_cron is enabled in your Supabase project, run the lines below in SQL Editor:
+--
+-- create extension if not exists pg_cron;
+-- select cron.schedule(
+--   'auto-clock-out-14h-job',
+--   '*/10 * * * *',
+--   $$select auto_clock_out_expired()$$
+-- );
+-- ============================================================
 
 -- ============================================================
 -- Last step: set your admin PIN (replace 123456 with your own),

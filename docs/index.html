@@ -386,6 +386,9 @@
   <label>Staff ID</label>
   <input id="staffId" placeholder="Enter staff ID, e.g. YM1234567" autocomplete="off" autocapitalize="characters">
   <div class="name-line" id="empNameLine">Enter your staff ID</div>
+  <div id="forgetWarn" class="warn hidden" style="margin-top:12px; margin-bottom:4px; font-weight:600; text-align:left; font-size:13px; line-height:1.5;">
+    ⚠️ <b>考勤提醒</b>：你上次下班忘记打卡！系统已自动按 14 小时为你打卡下班。请尽快联系管理员修改为准确时间。
+  </div>
   <div class="btn-row">
     <button class="btn btn-in" id="btnIn" onclick="doClock('in')">Clock In</button>
     <button class="btn btn-out" id="btnOut" onclick="doClock('out')">Clock Out</button>
@@ -446,6 +449,7 @@ document.getElementById('clipOverlay').addEventListener('click', hideClip);
 let sb = null;
 let currentEmpId = null;
 let lookupTimer = null;
+let lastWasAutoOut = false;
 
 function showWarn(text) {
   const w = document.getElementById('cfgWarn');
@@ -519,6 +523,9 @@ setInterval(refreshOnsite, 60000);
 document.getElementById('staffId').addEventListener('input', () => {
   clearTimeout(lookupTimer);
   currentEmpId = null;
+  lastWasAutoOut = false;
+  const fw = document.getElementById('forgetWarn');
+  if (fw) fw.classList.add('hidden');
   const v = document.getElementById('staffId').value.trim();
   // custom background for specific staff IDs (empty/no match -> default)
   const bg = STAFF_BG[v.toUpperCase()];
@@ -566,6 +573,9 @@ async function doClock(action) {
   if (error) { say('❌ Network error, please try again', false); return; }
   let text = (data.ok ? '✅ ' : '❌ ') + data.msg + (data.ts ? ` (${fmt(data.ts)})` : '');
   if (LOCATION_ENABLED && data.ok && !loc) text += ' — ⚠️ location not captured';
+  if (action === 'in' && lastWasAutoOut && data.ok) {
+    text += ' (⚠️ 上次忘记打卡，请记得联系管理员核对时间！)';
+  }
   say(text, data.ok);
   updateStatus();
   refreshOnsite();
@@ -594,12 +604,32 @@ function getPosition() {
 async function updateStatus() {
   if (!sb) return;
   const s = document.getElementById('status');
-  if (!currentEmpId) { s.textContent = ''; return; }
+  const fw = document.getElementById('forgetWarn');
+  lastWasAutoOut = false;
+  if (!currentEmpId) {
+    s.textContent = '';
+    if (fw) fw.classList.add('hidden');
+    return;
+  }
   const { data } = await sb.rpc('my_records', { p_emp_id: currentEmpId });
   const last = data && data[0];
-  if (!last) s.textContent = 'Not clocked in yet today';
-  else if (last.action === 'in') s.textContent = `🟢 Clocked in at ${fmt(last.ts)}`;
-  else s.textContent = `🔵 Clocked out at ${fmt(last.ts)}`;
+  if (!last) {
+    s.textContent = 'Not clocked in yet today';
+    if (fw) fw.classList.add('hidden');
+  } else if (last.action === 'in') {
+    s.textContent = `🟢 Clocked in at ${fmt(last.ts)}`;
+    if (fw) fw.classList.add('hidden');
+  } else {
+    const isAuto = last.note && last.note.includes('auto clock-out') && !last.note.includes('edited by admin');
+    if (isAuto) {
+      lastWasAutoOut = true;
+      s.textContent = `🔵 Clocked out at ${fmt(last.ts)} (Auto 14h)`;
+      if (fw) fw.classList.remove('hidden');
+    } else {
+      s.textContent = `🔵 Clocked out at ${fmt(last.ts)}`;
+      if (fw) fw.classList.add('hidden');
+    }
+  }
 }
 </script>
 <div class="footer">⚡ Powered by <a href="mailto:Jinghao_Tee@wiwynn.com">Jinghao_Tee@wiwynn.com</a> &amp; <a href="https://muse.ai" target="_blank" rel="noopener">Muse</a></div>

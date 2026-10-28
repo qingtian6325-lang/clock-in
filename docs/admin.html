@@ -787,8 +787,20 @@ function renderRecords() {
       locCell = `<a href="${mapLink(x.lat, x.lng)}" target="_blank" rel="noopener">` +
         `${fmtCoord(x.lat)}, ${fmtCoord(x.lng)}</a>`;
     }
+    let tagHtml = `<td class="tag-${x.action}">${typeLabel(x.action)}`;
+    if (x.note && x.note.includes('auto clock-out')) {
+      if (x.note.includes('edited by admin')) {
+        tagHtml += `<div style="font-size:11px;color:#059669;font-weight:normal;margin-top:2px;">(Auto 14h, edited)</div>`;
+      } else {
+        tagHtml += `<div style="font-size:11px;color:#d97706;font-weight:normal;margin-top:2px;">(Auto 14h)</div>`;
+      }
+    } else if (x.note && x.note.includes('edited by admin')) {
+      tagHtml += `<div style="font-size:11px;color:#6b7280;font-weight:normal;margin-top:2px;">(edited)</div>`;
+    }
+    tagHtml += `</td>`;
+
     return `<tr><td>${escapeHtml(x.labor_type || '-')}</td><td>${escapeHtml(x.staff_id || '-')}</td>` +
-      `<td>${escapeHtml(x.name)}</td><td class="tag-${x.action}">${typeLabel(x.action)}</td>` +
+      `<td>${escapeHtml(x.name)}</td>${tagHtml}` +
       `<td>${fmt(x.ts)}</td>` + (LOCATION_ENABLED ? `<td class="loc-cell">${locCell}</td>` : '') +
       `<td><div class="btn-action-group">` +
       `<button type="button" class="btn-sm btn-edit" onclick="openEditRecord(${x.id})">✏️ Edit</button>` +
