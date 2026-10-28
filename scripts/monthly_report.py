@@ -108,7 +108,7 @@ def fetch_data(year, month):
         "select": "id,name,staff_id,labor_type", "active": "eq.true", "order": "name",
     })
     records = sb_get("records", {
-        "select": "employee_id,action,ts",
+        "select": "employee_id,action,ts,note",
         "and": f"(ts.gte.{start_utc.isoformat()},ts.lt.{end_utc.isoformat()})",
         "order": "ts.asc",
         "limit": "50000",
@@ -123,24 +123,36 @@ def fmt_time(dt):
     return dt.strftime("%I:%M:%S %p").lstrip("0")
 
 
-def calc_hours(in_dt, out_dt):
+def calc_hours(in_dt, out_dt, note=""):
     """Working Hours / OT Hours for one day.
 
-    Rule: net working time = clock-out minus clock-in, minus 1 hour rest.
-    First 8 hours of net time are Working Hours; anything beyond 8 is OT
-    (30-minute units, rounded down; less than 30 min is dropped).
-    Returns (wh, ot) as rounded numbers, or (None, None) if not computable.
-    Overnight shifts (clock-out on the next day) use the same rule.
+    Rule:
+    - Net working time: clock-out minus clock-in; minus 1 hour rest if span >= 5 hours.
+    - First 8 hours of net time are Working Hours (up to 8.0).
+    - OT: Beyond 8 hours, in 30-minute units, rounded down.
+    - OT Freeze: If out punch was an unverified 14h auto clock-out (note has 'auto clock-out (14h limit)'
+      and does not contain 'edited'), OT is frozen to 0.0 until verified by admin.
     """
     if not in_dt or not out_dt or out_dt <= in_dt:
         return None, None
     in_m = in_dt.hour * 60 + in_dt.minute
     out_m = out_dt.hour * 60 + out_dt.minute
     span_m = (out_m + 1440 - in_m) if out_m < in_m else (out_m - in_m)
-    net = span_m / 60 - 1  # minus 1 hour rest time
-    wh = min(8, max(0, net))
-    # OT: net working time beyond 8 hours, 30-minute units, round down
-    ot = math.floor(max(0, net - 8) * 2) / 2
+    span_h = span_m / 60.0
+
+    # Deduct 1h rest only if span >= 5 hours
+    rest_h = 1.0 if span_h >= 5.0 else 0.0
+    net = max(0.0, span_h - rest_h)
+    wh = min(8.0, net)
+
+    # Freeze OT for unverified auto clock-out (14h limit)
+    is_unverified_auto = bool(
+        note and "auto clock-out (14h limit)" in note and "edited" not in note
+    )
+    if is_unverified_auto or net <= 8.0:
+        ot = 0.0
+    else:
+        ot = math.floor((net - 8.0) * 2) / 2
     return round(wh, 1), ot
 
 
@@ -170,12 +182,14 @@ def build_dashboard(employees, records, year, month):
         eid = r.get("employee_id")
         if eid not in per_emp:
             continue
-        local = datetime.fromisoformat(r["ts"]).astimezone(TZ)
+        out_raw = datetime.fromisoformat(r["ts"])
+        local = out_raw.astimezone(TZ)
         if local.date().year != year or local.date().month != month:
             continue
-        d = per_emp[eid]["days"].setdefault(local.date().isoformat(), {"in": None, "out": None})
+        d = per_emp[eid]["days"].setdefault(local.date().isoformat(), {"in": None, "in_raw": None, "out": None, "out_note": ""})
         if d["in"] is None or local < d["in"]:
             d["in"] = local
+            d["in_raw"] = out_raw
 
     # pass 2: clock-outs in chronological order, with night-shift attribution
     outs = sorted(
@@ -184,18 +198,28 @@ def build_dashboard(employees, records, year, month):
     )
     for r in outs:
         eid = r["employee_id"]
-        local = datetime.fromisoformat(r["ts"]).astimezone(TZ)
+        out_raw = datetime.fromisoformat(r["ts"])
+        local = out_raw.astimezone(TZ)
         target = local.date()
-        if local.hour < NIGHT_OUT_CUTOFF_HOUR:
-            prev = target - timedelta(days=1)
-            pd = per_emp[eid]["days"].get(prev.isoformat())
+
+        # Night shift pairing: if previous day has an open clock-in within 16 hours,
+        # pair with previous day regardless of whether out is before/after 12:00
+        prev = target - timedelta(days=1)
+        pd = per_emp[eid]["days"].get(prev.isoformat())
+        if pd is not None and pd["in_raw"] is not None and pd["out"] is None:
+            diff_h = (out_raw - pd["in_raw"]).total_seconds() / 3600.0
+            if 0 < diff_h <= 16.0:
+                target = prev
+        elif local.hour < NIGHT_OUT_CUTOFF_HOUR:
             if pd is not None and pd["in"] is not None and pd["out"] is None:
                 target = prev
+
         if target.year != year or target.month != month:
             continue
-        d = per_emp[eid]["days"].setdefault(target.isoformat(), {"in": None, "out": None})
+        d = per_emp[eid]["days"].setdefault(target.isoformat(), {"in": None, "in_raw": None, "out": None, "out_note": ""})
         if d["out"] is None or local > d["out"]:
             d["out"] = local
+            d["out_note"] = r.get("note") or ""
 
     rows = []
     for eid, info in per_emp.items():
@@ -212,7 +236,7 @@ def build_dashboard(employees, records, year, month):
                 cell["in"] = fmt_time(d["in"])
                 if d["out"] and d["out"] > d["in"]:
                     cell["out"] = fmt_time(d["out"])
-                    wh, ot = calc_hours(d["in"], d["out"])
+                    wh, ot = calc_hours(d["in"], d["out"], d.get("out_note", ""))
                     if wh is not None:
                         cell["wh"] = wh
                         cell["ot"] = ot

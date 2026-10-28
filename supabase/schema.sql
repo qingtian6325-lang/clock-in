@@ -127,6 +127,15 @@ begin
     return jsonb_build_object('ok', false, 'msg', 'You have already ' || v_past);
   end if;
 
+  -- 15-second anti-double-click protection:
+  -- Prevent employee from immediately clocking out within 15 seconds of clocking in
+  if p_action = 'out' and v_last = 'in' and (now() - v_last_ts) < interval '15 seconds' then
+    return jsonb_build_object(
+      'ok', false,
+      'msg', '⚠️ You just clocked in less than 15 seconds ago. Please wait a moment before clocking out.'
+    );
+  end if;
+
   v_ts := now();
   insert into records(employee_id, action, ts, lat, lng)
   values (p_emp_id, p_action, v_ts, p_lat, p_lng);
