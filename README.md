@@ -45,6 +45,31 @@ Start of month → GitHub Actions → generate report → Gmail to designated in
 
 ---
 
+### Attendance & Working Hours Rules
+
+#### 1. Clock In/Out Interlock & 15-second Debounce Protection
+- **Alternating Interlock**: Staff must Clock In before Clocking Out. Double-clocking the same action is prevented.
+- **15-second Debounce Protection**: Once clocked in, clocking out is disabled for 15 seconds to prevent accidental double-clicks or lag-induced early exits.
+
+#### 2. 14-Hour Auto Clock-Out & Employee Alert
+- **Auto Clock-out**: If an employee forgets to clock out, the system automatically inserts a clock-out record after 14 hours.
+- **Recorded Time**: Clock-out time is recorded as `Clock-In Time + 14 hours`.
+- **Note**: Tagged with `auto clock-out (14h limit)`.
+- **Next-day Alert**: When entering their Staff ID next day, a prominent yellow warning banner (`⚠️ Attendance Alert`) appears, reminding them to contact an admin to update their exact leaving time. Clock In is allowed and not blocked.
+- **Alert Dismissal**: Once an admin edits the record, the warning banner disappears.
+
+#### 3. Working Hours & OT Calculation (with OT Freeze Protection)
+- **Rest Time Deduction**: Shifts lasting 5 hours or more have 1 hour deducted for meals/rest; shifts under 5 hours have no deduction.
+- **Working Hours (WH)**: Up to 8.0 hours of net time.
+- **Overtime (OT)**: Beyond 8 hours, rounded down in 30-minute (0.5h) units.
+- **OT Freeze Protection**: For unverified 14h auto clock-outs, **OT is frozen to 0.0 hours** to prevent accidental excess overtime payout. Actual OT is only calculated after an admin verifies and edits the record.
+
+#### 4. Night Shift Pairing & Midnight Cutoff
+- **Attribution Day**: Clocking in before 23:59 belongs to the current calendar day.
+- **Overnight Pairing**: A clock-out occurring within 16 hours of an open clock-in from the previous day is paired with that night shift, even if auto clock-out triggers the next afternoon (e.g. 12:30 PM). Missing punches (NA) are completely eliminated.
+
+---
+
 ### Deployment (about 20 minutes, follow along)
 
 #### Step 1: Create a Supabase database (free)
