@@ -1,7 +1,5 @@
 # 📋 Company Attendance System (Cloud) / 考勤系统（云端版）
 
-🌐 **Live demo / 在线演示:** https://qingtian6325-lang.github.io/clock-in/
-
 [English](#english) | [中文](#中文)
 
 Everyone clocks in/out via a URL. All data is stored centrally in the cloud.
