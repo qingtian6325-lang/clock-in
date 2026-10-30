@@ -169,6 +169,7 @@
 
   table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
   .pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 12px 0 6px; font-size: 14px; color: #555; }
+  #btnMissed.on { background: #b45309; border-color: #b45309; color: #fff; }
   .pager button { padding: 8px 16px; border: 1.5px solid #e2e8f0; border-radius: 10px; background: #fff; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s ease; }
   .pager button:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
   .pager button:disabled { opacity: 0.4; cursor: default; }
@@ -428,6 +429,10 @@
         <input type="date" id="recDate" aria-label="Filter by date">
         <button type="button" class="dropbtn" id="recDateClear" aria-label="Clear date">✕</button>
       </div>
+      <div class="row2" style="margin-top:10px">
+        <button type="button" id="btnMissed" onclick="toggleMissed()">⚠️ Missed Punches (forgot to clock)</button>
+      </div>
+      <div id="missedSummary" class="hint hidden" style="margin-top:6px"></div>
       <table id="adminTable">
         <thead><tr><th>DL/IDL</th><th>ID</th><th>Name</th><th>Type</th><th>Time</th><th id="thLoc">Location</th><th>Edit and Delete Record</th></tr></thead><tbody></tbody>
       </table>
@@ -525,6 +530,9 @@ let sb = null;
 let employees = [];
 let selectedEmpId = null;
 let adminData = [];
+let missedMode = false;
+let adminFullLoaded = false;
+const missedMap = new Map(); // record id -> issue label (missed punches view)
 
 function showWarn(text) {
   const w = document.getElementById('cfgWarn');
@@ -730,10 +738,13 @@ async function loadAdmin() {
   if (error || !data.ok) { say('adminMsg', '❌ ' + (data && data.msg || 'Network error'), false); return; }
   say('adminMsg', '', null);
   adminData = data.records;
+  adminFullLoaded = false;
   recPage = 0;
   document.getElementById('adminBody').classList.remove('hidden');
   document.getElementById('adminGate').classList.add('hidden');
   await fetchEmployees();
+  if (missedMode) await ensureFullRecords(); // stay in missed view after edit/delete reload
+  updateMissedBtn();
   renderRecords();
   showPanel('records');
   if (!LOCATION_ENABLED) {
@@ -755,6 +766,12 @@ function mytYmd(ts) {
 }
 
 function filteredRecords() {
+  if (missedMode) {
+    const flagged = findMissedPunches(adminData);
+    missedMap.clear();
+    flagged.forEach(f => missedMap.set(f.rec.id, f.issue));
+    return flagged.map(f => f.rec);
+  }
   const q = document.getElementById('recSearch').value.trim().toLowerCase();
   const dt = document.getElementById('recDate').value; // yyyy-mm-dd or ''
   return adminData.filter(x => {
@@ -762,6 +779,78 @@ function filteredRecords() {
     if (dt && mytYmd(x.ts) !== dt) return false;
     return true;
   });
+}
+
+// ---- Missed Punches: one-click view of forgotten clock in/out ----
+// A record is flagged when:
+//  - a clock-in has no matching clock-out (next punch is another clock-in,
+//    or the shift is from a previous day and still open), or
+//  - a clock-out has no matching clock-in, or
+//  - it is an unverified 14h auto clock-out (admin should set the real time).
+function isAutoOutRec(r) {
+  return r.action === 'out' && r.note &&
+    r.note.includes('auto clock-out') && !r.note.includes('edited');
+}
+
+function findMissedPunches(records) {
+  const groups = {};
+  records.forEach(r => {
+    const k = r.staff_id || r.name;
+    (groups[k] = groups[k] || []).push(r);
+  });
+  const today = mytYmd(new Date().toISOString());
+  const flagged = [];
+  Object.values(groups).forEach(list => {
+    list.sort((a, b) => a.id - b.id);
+    let openIn = null;
+    list.forEach(r => {
+      if (isAutoOutRec(r)) {
+        flagged.push({ rec: r, issue: '🤖 Auto clock-out (14h) — not verified' });
+      }
+      if (r.action === 'in') {
+        if (openIn) flagged.push({ rec: openIn, issue: '⚠️ Missing clock-out' });
+        openIn = r;
+      } else {
+        if (!openIn) flagged.push({ rec: r, issue: '⚠️ Missing clock-in' });
+        openIn = null;
+      }
+    });
+    if (openIn && mytYmd(openIn.ts) < today) {
+      flagged.push({ rec: openIn, issue: '⚠️ Missing clock-out' });
+    }
+  });
+  return flagged.sort((a, b) => b.rec.id - a.rec.id); // newest first
+}
+
+async function ensureFullRecords() {
+  if (adminFullLoaded) return true;
+  const pin = document.getElementById('adminPin').value.trim();
+  const { data, error } = await sb.rpc('admin_records', { p_admin_pin: pin, p_limit: 10000 });
+  if (error || !data.ok) return false;
+  adminData = data.records;
+  adminFullLoaded = true;
+  return true;
+}
+
+function updateMissedBtn() {
+  const btn = document.getElementById('btnMissed');
+  btn.classList.toggle('on', missedMode);
+  btn.textContent = missedMode
+    ? '⚠️ Missed Punches: ON (tap to show all)'
+    : '⚠️ Missed Punches (forgot to clock)';
+}
+
+async function toggleMissed() {
+  if (!sb) return;
+  missedMode = !missedMode;
+  if (missedMode) {
+    say('adminMsg', '⏳ Scanning all records…', true);
+    await ensureFullRecords();
+    say('adminMsg', '', null);
+  }
+  updateMissedBtn();
+  recPage = 0;
+  renderRecords();
 }
 
 function clearRecSearch() {
@@ -778,6 +867,15 @@ function clearRecDate() {
 
 function renderRecords() {
   const list = filteredRecords();
+  const sumEl = document.getElementById('missedSummary');
+  if (missedMode) {
+    sumEl.textContent = list.length
+      ? `⚠️ ${list.length} missed punch(es) need fixing — use ✏️ Edit to correct the time, or 🗑️ Delete the wrong punch, then use Backfill to add the missing one.`
+      : '🎉 No missed punches — everyone clocked in and out properly.';
+    sumEl.classList.remove('hidden');
+  } else {
+    sumEl.classList.add('hidden');
+  }
   const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
   if (recPage >= pages) recPage = pages - 1;
   const slice = list.slice(recPage * PAGE_SIZE, recPage * PAGE_SIZE + PAGE_SIZE);
@@ -796,6 +894,9 @@ function renderRecords() {
       }
     } else if (x.note && x.note.includes('edited by admin')) {
       tagHtml += `<div style="font-size:11px;color:#6b7280;font-weight:normal;margin-top:2px;">(edited)</div>`;
+    }
+    if (missedMode && missedMap.has(x.id)) {
+      tagHtml += `<div style="font-size:11px;color:#dc2626;font-weight:700;margin-top:2px;">${escapeHtml(missedMap.get(x.id))}</div>`;
     }
     tagHtml += `</td>`;
 
