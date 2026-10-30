@@ -191,7 +191,8 @@
   }
   .mini-btn:hover { background: #e2e8f0; }
 
-  .btn-action-group { display: flex; gap: 6px; }
+  .btn-action-group { display: flex; flex-wrap: wrap; gap: 6px; }
+  .panel { overflow-x: auto; }
   .btn-sm {
     padding: 6px 10px;
     border: none;
@@ -563,7 +564,7 @@
         <button type="button" class="dropbtn" onclick="adminFullLoaded=false;loadMissedPanel();" title="Refresh scan">🔄</button>
       </div>
       <table id="missedTable">
-        <thead><tr><th>DL/IDL</th><th>ID</th><th>Name</th><th>Type</th><th>Issue</th><th>Time</th><th id="thLoc2">Location</th><th>Quick Actions</th></tr></thead><tbody></tbody>
+        <thead><tr><th>Employee</th><th>Punch &amp; Time</th><th>Issue</th><th id="thLoc2">Location</th><th>Actions</th></tr></thead><tbody></tbody>
       </table>
       <div class="hint">💡 <b>🤖 Auto 14h</b>: Click <b>✏️ Edit</b> to set the employee's real leaving time (this unfreezes OT and clears the alert).<br>💡 <b>⚠️ Missing Out / In</b>: Click <b>➕ Backfill</b> to jump straight to Backfill Record with the employee and date pre-filled!</div>
     </div>
@@ -1046,7 +1047,7 @@ function renderMissed() {
 
   document.querySelector('#missedTable tbody').innerHTML = filtered.length
     ? filtered.map(f => missedRowHtml(f)).join('')
-    : '<tr><td colspan="' + (LOCATION_ENABLED ? 8 : 7) + '" style="text-align:center;color:#64748b;padding:20px;">' +
+    : '<tr><td colspan="' + (LOCATION_ENABLED ? 5 : 4) + '" style="text-align:center;color:#64748b;padding:20px;">' +
       (allFlagged.length ? 'No matching records for this filter' : '🎉 No missed punches!') + '</td></tr>';
 }
 
@@ -1068,10 +1069,13 @@ function missedRowHtml(f) {
     quickBtn = `<button type="button" class="btn-sm btn-backfill" onclick="quickBackfill(${x.id}, 'in')">➕ Backfill In</button>`;
   }
 
-  return `<tr><td>${escapeHtml(x.labor_type || '-')}</td><td>${escapeHtml(x.staff_id || '-')}</td>` +
-    `<td><b>${escapeHtml(x.name)}</b></td><td class="tag-${x.action}">${typeLabel(x.action)}</td>` +
+  return `<tr>` +
+    `<td><div style="font-weight:700;color:#0f172a">${escapeHtml(x.name)}</div>` +
+    `<div style="font-size:11.5px;color:#64748b;margin-top:2px">${escapeHtml(x.staff_id || '-')} · ${escapeHtml(x.labor_type || '-')}</div></td>` +
+    `<td><div class="tag-${x.action}" style="font-size:13px">${typeLabel(x.action)}</div>` +
+    `<div style="font-size:12px;color:#475569;margin-top:2px;white-space:nowrap">${fmt(x.ts)}</div></td>` +
     issueCell +
-    `<td>${fmt(x.ts)}</td>` + (LOCATION_ENABLED ? `<td class="loc-cell">${locCell}</td>` : '') +
+    (LOCATION_ENABLED ? `<td class="loc-cell">${locCell}</td>` : '') +
     `<td><div class="btn-action-group">` +
     quickBtn +
     `<button type="button" class="btn-sm btn-edit" onclick="openEditRecord(${x.id})">✏️ Edit</button>` +
