@@ -805,18 +805,18 @@ function findMissedPunches(records) {
     let openIn = null;
     list.forEach(r => {
       if (isAutoOutRec(r)) {
-        flagged.push({ rec: r, issue: '🤖 Auto clock-out (14h) — not verified' });
+        flagged.push({ rec: r, issue: '🤖 Not verified' });
       }
       if (r.action === 'in') {
-        if (openIn) flagged.push({ rec: openIn, issue: '⚠️ Missing clock-out' });
+        if (openIn) flagged.push({ rec: openIn, issue: '⚠️ Missing Out' });
         openIn = r;
       } else {
-        if (!openIn) flagged.push({ rec: r, issue: '⚠️ Missing clock-in' });
+        if (!openIn) flagged.push({ rec: r, issue: '⚠️ Missing In' });
         openIn = null;
       }
     });
     if (openIn && mytYmd(openIn.ts) < today) {
-      flagged.push({ rec: openIn, issue: '⚠️ Missing clock-out' });
+      flagged.push({ rec: openIn, issue: '⚠️ Missing Out' });
     }
   });
   return flagged.sort((a, b) => b.rec.id - a.rec.id); // newest first
