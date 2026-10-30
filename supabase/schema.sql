@@ -66,7 +66,7 @@ begin
       select id, action, ts
       from records
       where employee_id = e.id
-      order by id desc
+      order by ts desc, id desc
       limit 1
     ) lr on true
     where e.active
@@ -118,7 +118,7 @@ begin
   select r.action, r.ts into v_last, v_last_ts
   from records r
   where r.employee_id = p_emp_id
-  order by r.id desc limit 1;
+  order by r.ts desc, r.id desc limit 1;
 
   v_label := case when p_action = 'in' then 'Clocked in' else 'Clocked out' end;
   v_past := case when p_action = 'in' then 'clocked in' else 'clocked out' end;
@@ -182,7 +182,7 @@ as $$
      from (
        select action, ts, note from records
        where employee_id = p_emp_id
-       order by id desc
+       order by ts desc, id desc
        limit 1
      ) r),
     '[]'::jsonb
@@ -212,8 +212,8 @@ begin
         'action', r.action, 'ts', r.ts,
         'lat', r.lat, 'lng', r.lng,
         'note', coalesce(r.note, '')
-      ) order by r.id desc), '[]'::jsonb)
-    from (select * from records order by id desc limit p_limit) r
+      ) order by r.ts desc, r.id desc), '[]'::jsonb)
+    from (select * from records order by ts desc, id desc limit p_limit) r
     join employees e on e.id = r.employee_id
   ));
 end;
@@ -291,7 +291,7 @@ begin
     return jsonb_build_object('ok', false, 'msg', 'Invalid action');
   end if;
 
-  if not exists (select 1 from employees where id = p_emp_id and active) then
+  if not exists (select 1 from employees where id = p_emp_id) then
     return jsonb_build_object('ok', false, 'msg', 'Employee not found');
   end if;
 
@@ -637,7 +637,7 @@ begin
         select r.action, r.ts
         from records r
         where r.employee_id = e.id
-        order by r.id desc limit 1
+        order by r.ts desc, r.id desc limit 1
       ) r on true
       where e.active
         and r.action = 'in'

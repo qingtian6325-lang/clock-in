@@ -206,6 +206,97 @@
   .btn-edit:hover { background: #dbeafe; }
   .btn-del { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
   .btn-del:hover { background: #fee2e2; }
+  .btn-backfill { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+  .btn-backfill:hover { background: #d1fae5; }
+
+  /* Missed Punches UI */
+  .menu-badge {
+    margin-left: auto;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 800;
+    background: #fee2e2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+  }
+  .menu button.active .menu-badge {
+    background: rgba(255, 255, 255, 0.22);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+  .missed-banner {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: var(--radius-md);
+    margin-top: 10px;
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+  .missed-banner.has-issues {
+    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+    border: 1px solid #fcd34d;
+    color: #92400e;
+  }
+  .missed-banner.all-clear {
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+    border: 1px solid #6ee7b7;
+    color: #065f46;
+  }
+  .missed-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .missed-pill {
+    padding: 7px 13px;
+    border-radius: 999px;
+    border: 1.5px solid #e2e8f0;
+    background: #ffffff;
+    color: #475569;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.18s ease;
+  }
+  .missed-pill:hover { border-color: #94a3b8; background: #f8fafc; }
+  .missed-pill.active {
+    background: #1e293b;
+    color: #ffffff;
+    border-color: #1e293b;
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.15);
+  }
+  .missed-pill .pill-count {
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    background: #f1f5f9;
+    color: #334155;
+  }
+  .missed-pill.active .pill-count {
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+  }
+  .issue-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .issue-auto { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+  .issue-miss { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+  .issue-sub { font-size: 11px; color: #64748b; margin-top: 3px; font-weight: 500; }
 
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
@@ -339,7 +430,7 @@
       <button id="btn-editEmp" onclick="showPanel('editEmp')">✏️ Edit Employee</button>
       <button id="btn-backfill" onclick="showPanel('backfill')">🕐 Backfill Record</button>
       <button id="btn-records" onclick="showPanel('records')">📋 Check All Records</button>
-      <button id="btn-missed" onclick="showPanel('missed')">⚠️ Missed Punches</button>
+      <button id="btn-missed" onclick="showPanel('missed')">⚠️ Missed Punches <span id="missedMenuBadge" class="menu-badge hidden">0</span></button>
       <button id="btn-location" onclick="showPanel('location')">📍 Out-of-Range Check-ins</button>
     </div>
     <div class="msg" id="adminMsg2"></div>
@@ -439,9 +530,15 @@
         <input type="date" id="listTo">
         <button class="btn-blue" onclick="exportExcel()">⬇ Export</button>
       </div>
-      <label style="margin-top:12px">Dashboard month</label>
+      <label style="margin-top:12px">Dashboard month &amp; Employee filter</label>
       <div class="row2">
         <input type="month" id="dashMonth">
+        <select id="dashIncludeInactive" style="max-width:240px">
+          <option value="active">Active employees only</option>
+          <option value="all">Include Inactive employees</option>
+        </select>
+      </div>
+      <div class="row2" style="margin-top:8px">
         <button class="btn-blue" onclick="exportDashboard()">⬇ Export Dashboard (Excel)</button>
       </div>
       <label style="margin-top:12px">Email dashboard to</label>
@@ -453,11 +550,22 @@
     </div>
 
     <div id="panel-missed" class="panel hidden">
-      <div id="missedSummary" class="hint">Loading…</div>
+      <div id="missedSummary" class="missed-banner has-issues">⏳ Scanning all records…</div>
+      <div class="missed-pills" id="missedPills">
+        <button type="button" class="missed-pill active" data-filter="all" onclick="setMissedFilter('all')">All Issues <span class="pill-count" id="mpCountAll">0</span></button>
+        <button type="button" class="missed-pill" data-filter="auto" onclick="setMissedFilter('auto')">🤖 Auto 14h (Unverified) <span class="pill-count" id="mpCountAuto">0</span></button>
+        <button type="button" class="missed-pill" data-filter="out" onclick="setMissedFilter('out')">⚠️ Missing Out <span class="pill-count" id="mpCountOut">0</span></button>
+        <button type="button" class="missed-pill" data-filter="in" onclick="setMissedFilter('in')">⚠️ Missing In <span class="pill-count" id="mpCountIn">0</span></button>
+      </div>
+      <div class="picker-row" style="margin-top:12px">
+        <input id="missedSearch" placeholder="Filter by employee name or staff ID…" autocomplete="off" oninput="renderMissed()">
+        <button type="button" class="dropbtn" onclick="document.getElementById('missedSearch').value='';renderMissed();" aria-label="Clear filter">✕</button>
+        <button type="button" class="dropbtn" onclick="adminFullLoaded=false;loadMissedPanel();" title="Refresh scan">🔄</button>
+      </div>
       <table id="missedTable">
-        <thead><tr><th>DL/IDL</th><th>ID</th><th>Name</th><th>Type</th><th>Time</th><th id="thLoc2">Location</th><th>Edit and Delete Record</th></tr></thead><tbody></tbody>
+        <thead><tr><th>DL/IDL</th><th>ID</th><th>Name</th><th>Type</th><th>Issue</th><th>Time</th><th id="thLoc2">Location</th><th>Quick Actions</th></tr></thead><tbody></tbody>
       </table>
-      <div class="hint">💡 Use ✏️ Edit to correct a punch, 🗑️ Delete to remove a wrong one, and the Backfill Record panel to add a punch that is completely missing.</div>
+      <div class="hint">💡 <b>🤖 Auto 14h</b>: Click <b>✏️ Edit</b> to set the employee's real leaving time (this unfreezes OT and clears the alert).<br>💡 <b>⚠️ Missing Out / In</b>: Click <b>➕ Backfill</b> to jump straight to Backfill Record with the employee and date pre-filled!</div>
     </div>
 
     <div id="panel-location" class="panel hidden">
@@ -612,9 +720,10 @@ function renderEmpSuggest(hits) {
   if (!hits.length) {
     empSuggest.innerHTML = '<div class="sug-empty">No match</div>';
   } else {
-    empSuggest.innerHTML = hits.map(e =>
-      `<button type="button" data-id="${e.id}" data-label="${escapeHtml((e.staff_id || 'No ID') + ' - ' + e.name)}">${escapeHtml((e.staff_id || 'No ID') + ' - ' + e.name)}</button>`
-    ).join('');
+    empSuggest.innerHTML = hits.map(e => {
+      const label = empLabel(e);
+      return `<button type="button" data-id="${e.id}" data-label="${escapeHtml(label)}">${escapeHtml(label)}</button>`;
+    }).join('');
     empSuggest.querySelectorAll('button').forEach(b =>
       b.addEventListener('click', () => {
         selectedEmpId = +b.dataset.id;
@@ -750,6 +859,7 @@ async function loadAdmin() {
   document.getElementById('adminGate').classList.add('hidden');
   await fetchEmployees();
   renderRecords();
+  updateMissedBadge(findMissedPunches(adminData));
   showPanel(currentPanel);
   if (!LOCATION_ENABLED) {
     document.getElementById('btn-location').style.display = 'none';
@@ -763,6 +873,7 @@ async function loadAdmin() {
 // Records table with pagination (15 per page)
 const PAGE_SIZE = 15;
 let recPage = 0;
+let missedFilter = 'all';
 
 const MYT_MS = 8 * 3600 * 1000; // Malaysia has no DST, fixed UTC+8
 function mytYmd(ts) {
@@ -784,7 +895,7 @@ function filteredRecords() {
 // ---- Missed Punches: one-click view of forgotten clock in/out ----
 // A record is flagged when:
 //  - a clock-in has no matching clock-out (next punch is another clock-in,
-//    or the shift is from a previous day and still open), or
+//    or the shift has been open for > 14 hours), or
 //  - a clock-out has no matching clock-in, or
 //  - it is an unverified 14h auto clock-out (admin should set the real time).
 function isAutoOutRec(r) {
@@ -798,28 +909,90 @@ function findMissedPunches(records) {
     const k = r.staff_id || r.name;
     (groups[k] = groups[k] || []).push(r);
   });
-  const today = mytYmd(new Date().toISOString());
+  const nowMs = Date.now();
+  const LIMIT_14H_MS = 14 * 3600 * 1000;
   const flagged = [];
   Object.values(groups).forEach(list => {
-    list.sort((a, b) => a.id - b.id);
+    // Sort chronologically by timestamp first (so backfilled records fall into their proper date order)
+    list.sort((a, b) => (new Date(a.ts) - new Date(b.ts)) || (a.id - b.id));
     let openIn = null;
     list.forEach(r => {
       if (isAutoOutRec(r)) {
-        flagged.push({ rec: r, issue: '🤖 Not verified' });
+        flagged.push({
+          rec: r,
+          type: 'auto',
+          issue: '🤖 Auto 14h (Unverified)',
+          sub: 'OT frozen at 0h until edited'
+        });
       }
       if (r.action === 'in') {
-        if (openIn) flagged.push({ rec: openIn, issue: '⚠️ Missing Out' });
+        if (openIn) {
+          flagged.push({
+            rec: openIn,
+            type: 'out',
+            issue: '⚠️ Missing Out',
+            sub: 'Clocked in again without Clock Out'
+          });
+        }
         openIn = r;
       } else {
-        if (!openIn) flagged.push({ rec: r, issue: '⚠️ Missing In' });
+        if (!openIn) {
+          flagged.push({
+            rec: r,
+            type: 'in',
+            issue: '⚠️ Missing In',
+            sub: 'Clocked out without Clock In'
+          });
+        }
         openIn = null;
       }
     });
-    if (openIn && mytYmd(openIn.ts) < today) {
-      flagged.push({ rec: openIn, issue: '⚠️ Missing Out' });
+    // Only flag an open Clock In if it has exceeded 14 hours (active night-shift workers < 14h are NOT flagged)
+    if (openIn && (nowMs - new Date(openIn.ts).getTime()) > LIMIT_14H_MS) {
+      flagged.push({
+        rec: openIn,
+        type: 'out',
+        issue: '⚠️ Missing Out',
+        sub: 'Shift open for > 14 hours'
+      });
     }
   });
-  return flagged.sort((a, b) => b.rec.id - a.rec.id); // newest first
+  return flagged.sort((a, b) => (new Date(b.rec.ts) - new Date(a.rec.ts)) || (b.rec.id - a.rec.id)); // newest first
+}
+
+function updateMissedBadge(flagged) {
+  const badge = document.getElementById('missedMenuBadge');
+  if (!badge) return;
+  if (flagged && flagged.length > 0) {
+    badge.textContent = flagged.length;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+function setMissedFilter(f) {
+  missedFilter = f;
+  document.querySelectorAll('#missedPills .missed-pill').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === f);
+  });
+  renderMissed();
+}
+
+function quickBackfill(recordId, missingAction) {
+  const rec = adminData && adminData.find(r => r.id === recordId);
+  if (!rec) return;
+  const emp = employees.find(e => (rec.staff_id && e.staff_id === rec.staff_id) || e.name === rec.name);
+  showPanel('backfill');
+  if (emp) {
+    selectedEmpId = emp.id;
+    empSearch.value = empLabel(emp);
+    pickedLine.textContent = '✓ Selected: ' + empLabel(emp);
+  }
+  document.getElementById('fixAction').value = missingAction;
+  document.getElementById('fixTime').value = toDatetimeLocal(rec.ts);
+  document.getElementById('fixTime').focus();
+  say('adminMsg2', `💡 Pre-filled ${rec.name} (${missingAction === 'out' ? 'Clock Out' : 'Clock In'}) — adjust the exact time and click Add`, true);
 }
 
 async function ensureFullRecords() {
@@ -835,21 +1008,75 @@ async function ensureFullRecords() {
 // Missed Punches panel: scan ALL records, list only the problem punches
 async function loadMissedPanel() {
   if (!sb) return;
-  document.getElementById('missedSummary').textContent = '⏳ Scanning all records…';
+  const sumEl = document.getElementById('missedSummary');
+  sumEl.className = 'missed-banner has-issues';
+  sumEl.textContent = '⏳ Scanning all records…';
   await ensureFullRecords();
   renderMissed();
 }
 
 function renderMissed() {
-  const flagged = findMissedPunches(adminData);
-  missedMap.clear();
-  flagged.forEach(f => missedMap.set(f.rec.id, f.issue));
-  document.getElementById('missedSummary').textContent = flagged.length
-    ? `⚠️ ${flagged.length} missed punch(es) need fixing — use ✏️ Edit to correct the time, or 🗑️ Delete the wrong punch, then use Backfill to add the missing one.`
-    : '🎉 No missed punches — everyone clocked in and out properly.';
-  document.querySelector('#missedTable tbody').innerHTML = flagged.length
-    ? flagged.map(f => recordRowHtml(f.rec, true)).join('')
-    : '<tr><td colspan="' + (LOCATION_ENABLED ? 7 : 6) + '">No missed punches 🎉</td></tr>';
+  const allFlagged = findMissedPunches(adminData);
+  updateMissedBadge(allFlagged);
+
+  const countAuto = allFlagged.filter(f => f.type === 'auto').length;
+  const countOut  = allFlagged.filter(f => f.type === 'out').length;
+  const countIn   = allFlagged.filter(f => f.type === 'in').length;
+  document.getElementById('mpCountAll').textContent  = allFlagged.length;
+  document.getElementById('mpCountAuto').textContent = countAuto;
+  document.getElementById('mpCountOut').textContent  = countOut;
+  document.getElementById('mpCountIn').textContent   = countIn;
+
+  const sumEl = document.getElementById('missedSummary');
+  if (allFlagged.length) {
+    sumEl.className = 'missed-banner has-issues';
+    sumEl.innerHTML = `<div><b>⚠️ ${allFlagged.length} record(s) require attention</b> — ` +
+      `<b>${countAuto}</b> unverified 14h auto clock-out(s), <b>${countOut}</b> missing clock-out(s), <b>${countIn}</b> missing clock-in(s).</div>`;
+  } else {
+    sumEl.className = 'missed-banner all-clear';
+    sumEl.innerHTML = `<div><b>🎉 All clear!</b> Every shift is properly paired and verified.</div>`;
+  }
+
+  const q = (document.getElementById('missedSearch')?.value || '').trim().toLowerCase();
+  const filtered = allFlagged.filter(f => {
+    if (missedFilter !== 'all' && f.type !== missedFilter) return false;
+    if (q && !(((f.rec.staff_id || '') + ' ' + f.rec.name).toLowerCase().includes(q))) return false;
+    return true;
+  });
+
+  document.querySelector('#missedTable tbody').innerHTML = filtered.length
+    ? filtered.map(f => missedRowHtml(f)).join('')
+    : '<tr><td colspan="' + (LOCATION_ENABLED ? 8 : 7) + '" style="text-align:center;color:#64748b;padding:20px;">' +
+      (allFlagged.length ? 'No matching records for this filter' : '🎉 No missed punches!') + '</td></tr>';
+}
+
+function missedRowHtml(f) {
+  const x = f.rec;
+  let locCell = '—';
+  if (x.lat != null && x.lng != null) {
+    locCell = `<a href="${mapLink(x.lat, x.lng)}" target="_blank" rel="noopener">` +
+      `${fmtCoord(x.lat)}, ${fmtCoord(x.lng)}</a>`;
+  }
+  const badgeClass = f.type === 'auto' ? 'issue-badge issue-auto' : 'issue-badge issue-miss';
+  const issueCell = `<td><span class="${badgeClass}">${escapeHtml(f.issue)}</span>` +
+    (f.sub ? `<div class="issue-sub">${escapeHtml(f.sub)}</div>` : '') + `</td>`;
+
+  let quickBtn = '';
+  if (f.type === 'out') {
+    quickBtn = `<button type="button" class="btn-sm btn-backfill" onclick="quickBackfill(${x.id}, 'out')">➕ Backfill Out</button>`;
+  } else if (f.type === 'in') {
+    quickBtn = `<button type="button" class="btn-sm btn-backfill" onclick="quickBackfill(${x.id}, 'in')">➕ Backfill In</button>`;
+  }
+
+  return `<tr><td>${escapeHtml(x.labor_type || '-')}</td><td>${escapeHtml(x.staff_id || '-')}</td>` +
+    `<td><b>${escapeHtml(x.name)}</b></td><td class="tag-${x.action}">${typeLabel(x.action)}</td>` +
+    issueCell +
+    `<td>${fmt(x.ts)}</td>` + (LOCATION_ENABLED ? `<td class="loc-cell">${locCell}</td>` : '') +
+    `<td><div class="btn-action-group">` +
+    quickBtn +
+    `<button type="button" class="btn-sm btn-edit" onclick="openEditRecord(${x.id})">✏️ Edit</button>` +
+    `<button type="button" class="btn-sm btn-del" onclick="deleteRecord(${x.id})">🗑️ Delete</button>` +
+    `</div></td></tr>`;
 }
 
 function clearRecSearch() {
@@ -864,8 +1091,8 @@ function clearRecDate() {
   renderRecords();
 }
 
-// One records-table row (shared by Check All Records and Missed Punches)
-function recordRowHtml(x, showIssue) {
+// One records-table row (for Check All Records)
+function recordRowHtml(x) {
   let locCell = '—';
   if (x.lat != null && x.lng != null) {
     locCell = `<a href="${mapLink(x.lat, x.lng)}" target="_blank" rel="noopener">` +
@@ -880,9 +1107,6 @@ function recordRowHtml(x, showIssue) {
     }
   } else if (x.note && x.note.includes('edited by admin')) {
     tagHtml += `<div style="font-size:11px;color:#6b7280;font-weight:normal;margin-top:2px;">(edited)</div>`;
-  }
-  if (showIssue && missedMap.has(x.id)) {
-    tagHtml += `<div style="font-size:11px;color:#dc2626;font-weight:700;margin-top:2px;">${escapeHtml(missedMap.get(x.id))}</div>`;
   }
   tagHtml += `</td>`;
 
@@ -900,7 +1124,7 @@ function renderRecords() {
   const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
   if (recPage >= pages) recPage = pages - 1;
   const slice = list.slice(recPage * PAGE_SIZE, recPage * PAGE_SIZE + PAGE_SIZE);
-  document.querySelector('#adminTable tbody').innerHTML = slice.map(x => recordRowHtml(x, false)).join('')
+  document.querySelector('#adminTable tbody').innerHTML = slice.map(x => recordRowHtml(x)).join('')
     || '<tr><td colspan="' + (LOCATION_ENABLED ? 7 : 6) + '">No records</td></tr>';
   renderPager(list.length, pages);
 }
@@ -1167,12 +1391,13 @@ function calcHours(dIn, dOut, note) {
   return { wh: r1(wh), ot: ot };
 }
 
-function buildDashboardData(records, year, month) {
+function buildDashboardData(records, year, month, includeInactive) {
   const MYT = 8 * 3600 * 1000; // Malaysia has no DST, fixed UTC+8
   const NIGHT_CUTOFF = 12; // clock-outs before this hour (MYT) may belong to previous day's night shift
   const daysInMonth = new Date(year, month, 0).getDate();
+  const targetEmps = employees.filter(e => e.staff_id && (includeInactive || e.active));
   const perEmp = {};
-  employees.forEach(e => { if (e.staff_id) perEmp[e.staff_id] = { days: {} }; });
+  targetEmps.forEach(e => { perEmp[e.staff_id] = { days: {} }; });
   const myt = ts => new Date(new Date(ts).getTime() + MYT); // UTC getters now read MYT wall time
   const inMonth = d => d.getUTCFullYear() === year && d.getUTCMonth() + 1 === month;
 
@@ -1235,7 +1460,7 @@ function buildDashboardData(records, year, month) {
         d.out_note = r.note || '';
       }
     });
-  return employees.filter(e => e.staff_id).map(e => {
+  return targetEmps.map(e => {
     const info = perEmp[e.staff_id];
     const cells = [];
     for (let day = 1; day <= daysInMonth; day++) {
@@ -1252,7 +1477,7 @@ function buildDashboardData(records, year, month) {
       cells.push(cell);
     }
     return {
-      staff_id: e.staff_id, name: e.name,
+      staff_id: e.staff_id, name: e.active ? e.name : e.name + ' (inactive)',
       labor_type: e.labor_type || '',
       cells: cells
     };
@@ -1382,7 +1607,8 @@ async function sendDashboard() {
   try {
     const { data, error } = await sb.rpc('admin_records', { p_admin_pin: pin, p_limit: 10000 });
     if (error || !data.ok) { say('dashMsg', '❌ ' + (data && data.msg || 'Network error'), false); return; }
-    const rows = buildDashboardData(data.records || [], year, month);
+    const includeInactive = document.getElementById('dashIncludeInactive').value === 'all';
+    const rows = buildDashboardData(data.records || [], year, month, includeInactive);
     const { blob, filename } = await buildDashboardXlsx(rows, year, month);
     const file_base64 = await blobToBase64(blob);
     const resp = await fetch(CFG.SUPABASE_URL + '/functions/v1/send-dashboard', {
@@ -1419,7 +1645,8 @@ async function exportDashboard() {
   say('dashMsg', '⏳ Generating dashboard…', true);
   const { data, error } = await sb.rpc('admin_records', { p_admin_pin: pin, p_limit: 10000 });
   if (error || !data.ok) { say('dashMsg', '❌ ' + (data && data.msg || 'Network error'), false); return; }
-  const rows = buildDashboardData(data.records || [], year, month);
+  const includeInactive = document.getElementById('dashIncludeInactive').value === 'all';
+  const rows = buildDashboardData(data.records || [], year, month, includeInactive);
   await writeDashboardXlsx(rows, year, month);
   say('dashMsg', '✅ Dashboard downloaded (' + rows.length + ' employees)', true);
 }
