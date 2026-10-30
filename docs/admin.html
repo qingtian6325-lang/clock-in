@@ -169,7 +169,6 @@
 
   table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
   .pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 12px 0 6px; font-size: 14px; color: #555; }
-  #btnMissed.on { background: #b45309; border-color: #b45309; color: #fff; }
   .pager button { padding: 8px 16px; border: 1.5px solid #e2e8f0; border-radius: 10px; background: #fff; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s ease; }
   .pager button:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
   .pager button:disabled { opacity: 0.4; cursor: default; }
@@ -340,6 +339,7 @@
       <button id="btn-editEmp" onclick="showPanel('editEmp')">✏️ Edit Employee</button>
       <button id="btn-backfill" onclick="showPanel('backfill')">🕐 Backfill Record</button>
       <button id="btn-records" onclick="showPanel('records')">📋 Check All Records</button>
+      <button id="btn-missed" onclick="showPanel('missed')">⚠️ Missed Punches</button>
       <button id="btn-location" onclick="showPanel('location')">📍 Out-of-Range Check-ins</button>
     </div>
     <div class="msg" id="adminMsg2"></div>
@@ -429,10 +429,6 @@
         <input type="date" id="recDate" aria-label="Filter by date">
         <button type="button" class="dropbtn" id="recDateClear" aria-label="Clear date">✕</button>
       </div>
-      <div class="row2" style="margin-top:10px">
-        <button type="button" id="btnMissed" onclick="toggleMissed()">⚠️ Missed Punches (forgot to clock)</button>
-      </div>
-      <div id="missedSummary" class="hint hidden" style="margin-top:6px"></div>
       <table id="adminTable">
         <thead><tr><th>DL/IDL</th><th>ID</th><th>Name</th><th>Type</th><th>Time</th><th id="thLoc">Location</th><th>Edit and Delete Record</th></tr></thead><tbody></tbody>
       </table>
@@ -454,6 +450,14 @@
         <button onclick="sendDashboard()">✉ Send</button>
       </div>
       <div class="msg" id="dashMsg"></div>
+    </div>
+
+    <div id="panel-missed" class="panel hidden">
+      <div id="missedSummary" class="hint">Loading…</div>
+      <table id="missedTable">
+        <thead><tr><th>DL/IDL</th><th>ID</th><th>Name</th><th>Type</th><th>Time</th><th id="thLoc2">Location</th><th>Edit and Delete Record</th></tr></thead><tbody></tbody>
+      </table>
+      <div class="hint">💡 Use ✏️ Edit to correct a punch, 🗑️ Delete to remove a wrong one, and the Backfill Record panel to add a punch that is completely missing.</div>
     </div>
 
     <div id="panel-location" class="panel hidden">
@@ -530,7 +534,7 @@ let sb = null;
 let employees = [];
 let selectedEmpId = null;
 let adminData = [];
-let missedMode = false;
+let currentPanel = 'records';
 let adminFullLoaded = false;
 const missedMap = new Map(); // record id -> issue label (missed punches view)
 
@@ -572,11 +576,13 @@ function typeLabel(action) {
 
 // Switch between the 5 panels
 function showPanel(name) {
-  ['addEmp', 'editEmp', 'backfill', 'records', 'location'].forEach(p => {
+  currentPanel = name;
+  ['addEmp', 'editEmp', 'backfill', 'records', 'missed', 'location'].forEach(p => {
     document.getElementById('panel-' + p).classList.toggle('hidden', p !== name);
     document.getElementById('btn-' + p).classList.toggle('active', p === name);
   });
   if (name === 'location') loadLocationPanel();
+  if (name === 'missed') loadMissedPanel();
 }
 
 // Employee list for pickers: via admin RPC (includes inactive + labor type)
@@ -743,14 +749,14 @@ async function loadAdmin() {
   document.getElementById('adminBody').classList.remove('hidden');
   document.getElementById('adminGate').classList.add('hidden');
   await fetchEmployees();
-  if (missedMode) await ensureFullRecords(); // stay in missed view after edit/delete reload
-  updateMissedBtn();
   renderRecords();
-  showPanel('records');
+  showPanel(currentPanel);
   if (!LOCATION_ENABLED) {
     document.getElementById('btn-location').style.display = 'none';
     const thLoc = document.getElementById('thLoc');
     if (thLoc) thLoc.remove();
+    const thLoc2 = document.getElementById('thLoc2');
+    if (thLoc2) thLoc2.remove();
   }
 }
 
@@ -766,12 +772,6 @@ function mytYmd(ts) {
 }
 
 function filteredRecords() {
-  if (missedMode) {
-    const flagged = findMissedPunches(adminData);
-    missedMap.clear();
-    flagged.forEach(f => missedMap.set(f.rec.id, f.issue));
-    return flagged.map(f => f.rec);
-  }
   const q = document.getElementById('recSearch').value.trim().toLowerCase();
   const dt = document.getElementById('recDate').value; // yyyy-mm-dd or ''
   return adminData.filter(x => {
@@ -832,25 +832,24 @@ async function ensureFullRecords() {
   return true;
 }
 
-function updateMissedBtn() {
-  const btn = document.getElementById('btnMissed');
-  btn.classList.toggle('on', missedMode);
-  btn.textContent = missedMode
-    ? '⚠️ Missed Punches: ON (tap to show all)'
-    : '⚠️ Missed Punches (forgot to clock)';
+// Missed Punches panel: scan ALL records, list only the problem punches
+async function loadMissedPanel() {
+  if (!sb) return;
+  document.getElementById('missedSummary').textContent = '⏳ Scanning all records…';
+  await ensureFullRecords();
+  renderMissed();
 }
 
-async function toggleMissed() {
-  if (!sb) return;
-  missedMode = !missedMode;
-  if (missedMode) {
-    say('adminMsg', '⏳ Scanning all records…', true);
-    await ensureFullRecords();
-    say('adminMsg', '', null);
-  }
-  updateMissedBtn();
-  recPage = 0;
-  renderRecords();
+function renderMissed() {
+  const flagged = findMissedPunches(adminData);
+  missedMap.clear();
+  flagged.forEach(f => missedMap.set(f.rec.id, f.issue));
+  document.getElementById('missedSummary').textContent = flagged.length
+    ? `⚠️ ${flagged.length} missed punch(es) need fixing — use ✏️ Edit to correct the time, or 🗑️ Delete the wrong punch, then use Backfill to add the missing one.`
+    : '🎉 No missed punches — everyone clocked in and out properly.';
+  document.querySelector('#missedTable tbody').innerHTML = flagged.length
+    ? flagged.map(f => recordRowHtml(f.rec, true)).join('')
+    : '<tr><td colspan="' + (LOCATION_ENABLED ? 7 : 6) + '">No missed punches 🎉</td></tr>';
 }
 
 function clearRecSearch() {
@@ -865,49 +864,44 @@ function clearRecDate() {
   renderRecords();
 }
 
+// One records-table row (shared by Check All Records and Missed Punches)
+function recordRowHtml(x, showIssue) {
+  let locCell = '—';
+  if (x.lat != null && x.lng != null) {
+    locCell = `<a href="${mapLink(x.lat, x.lng)}" target="_blank" rel="noopener">` +
+      `${fmtCoord(x.lat)}, ${fmtCoord(x.lng)}</a>`;
+  }
+  let tagHtml = `<td class="tag-${x.action}">${typeLabel(x.action)}`;
+  if (x.note && x.note.includes('auto clock-out')) {
+    if (x.note.includes('edited by admin')) {
+      tagHtml += `<div style="font-size:11px;color:#059669;font-weight:normal;margin-top:2px;">(Auto 14h, edited)</div>`;
+    } else {
+      tagHtml += `<div style="font-size:11px;color:#d97706;font-weight:normal;margin-top:2px;">(Auto 14h)</div>`;
+    }
+  } else if (x.note && x.note.includes('edited by admin')) {
+    tagHtml += `<div style="font-size:11px;color:#6b7280;font-weight:normal;margin-top:2px;">(edited)</div>`;
+  }
+  if (showIssue && missedMap.has(x.id)) {
+    tagHtml += `<div style="font-size:11px;color:#dc2626;font-weight:700;margin-top:2px;">${escapeHtml(missedMap.get(x.id))}</div>`;
+  }
+  tagHtml += `</td>`;
+
+  return `<tr><td>${escapeHtml(x.labor_type || '-')}</td><td>${escapeHtml(x.staff_id || '-')}</td>` +
+    `<td>${escapeHtml(x.name)}</td>${tagHtml}` +
+    `<td>${fmt(x.ts)}</td>` + (LOCATION_ENABLED ? `<td class="loc-cell">${locCell}</td>` : '') +
+    `<td><div class="btn-action-group">` +
+    `<button type="button" class="btn-sm btn-edit" onclick="openEditRecord(${x.id})">✏️ Edit</button>` +
+    `<button type="button" class="btn-sm btn-del" onclick="deleteRecord(${x.id})">🗑️ Delete</button>` +
+    `</div></td></tr>`;
+}
+
 function renderRecords() {
   const list = filteredRecords();
-  const sumEl = document.getElementById('missedSummary');
-  if (missedMode) {
-    sumEl.textContent = list.length
-      ? `⚠️ ${list.length} missed punch(es) need fixing — use ✏️ Edit to correct the time, or 🗑️ Delete the wrong punch, then use Backfill to add the missing one.`
-      : '🎉 No missed punches — everyone clocked in and out properly.';
-    sumEl.classList.remove('hidden');
-  } else {
-    sumEl.classList.add('hidden');
-  }
   const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
   if (recPage >= pages) recPage = pages - 1;
   const slice = list.slice(recPage * PAGE_SIZE, recPage * PAGE_SIZE + PAGE_SIZE);
-  document.querySelector('#adminTable tbody').innerHTML = slice.map(x => {
-    let locCell = '—';
-    if (x.lat != null && x.lng != null) {
-      locCell = `<a href="${mapLink(x.lat, x.lng)}" target="_blank" rel="noopener">` +
-        `${fmtCoord(x.lat)}, ${fmtCoord(x.lng)}</a>`;
-    }
-    let tagHtml = `<td class="tag-${x.action}">${typeLabel(x.action)}`;
-    if (x.note && x.note.includes('auto clock-out')) {
-      if (x.note.includes('edited by admin')) {
-        tagHtml += `<div style="font-size:11px;color:#059669;font-weight:normal;margin-top:2px;">(Auto 14h, edited)</div>`;
-      } else {
-        tagHtml += `<div style="font-size:11px;color:#d97706;font-weight:normal;margin-top:2px;">(Auto 14h)</div>`;
-      }
-    } else if (x.note && x.note.includes('edited by admin')) {
-      tagHtml += `<div style="font-size:11px;color:#6b7280;font-weight:normal;margin-top:2px;">(edited)</div>`;
-    }
-    if (missedMode && missedMap.has(x.id)) {
-      tagHtml += `<div style="font-size:11px;color:#dc2626;font-weight:700;margin-top:2px;">${escapeHtml(missedMap.get(x.id))}</div>`;
-    }
-    tagHtml += `</td>`;
-
-    return `<tr><td>${escapeHtml(x.labor_type || '-')}</td><td>${escapeHtml(x.staff_id || '-')}</td>` +
-      `<td>${escapeHtml(x.name)}</td>${tagHtml}` +
-      `<td>${fmt(x.ts)}</td>` + (LOCATION_ENABLED ? `<td class="loc-cell">${locCell}</td>` : '') +
-      `<td><div class="btn-action-group">` +
-      `<button type="button" class="btn-sm btn-edit" onclick="openEditRecord(${x.id})">✏️ Edit</button>` +
-      `<button type="button" class="btn-sm btn-del" onclick="deleteRecord(${x.id})">🗑️ Delete</button>` +
-      `</div></td></tr>`;
-  }).join('') || '<tr><td colspan="' + (LOCATION_ENABLED ? 7 : 6) + '">No records</td></tr>';
+  document.querySelector('#adminTable tbody').innerHTML = slice.map(x => recordRowHtml(x, false)).join('')
+    || '<tr><td colspan="' + (LOCATION_ENABLED ? 7 : 6) + '">No records</td></tr>';
   renderPager(list.length, pages);
 }
 
