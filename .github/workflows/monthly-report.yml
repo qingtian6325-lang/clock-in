@@ -1,11 +1,11 @@
-# Monthly attendance dashboard: runs on the 1st of each month at 08:30 (UTC+8);
+# Monthly attendance dashboard: runs on the 1st of each month at 08:15 (UTC+8);
 # generates the dashboard for the whole previous month and emails it.
 # Can also be triggered manually (for testing / re-sends).
 name: Monthly Attendance Dashboard
 
 on:
   schedule:
-    - cron: '30 0 1 * *'   # 00:30 UTC on the 1st = 08:30 UTC+8 on the 1st
+    - cron: '15 0 1 * *'   # 00:15 UTC on the 1st = 08:15 UTC+8 on the 1st
   workflow_dispatch:
     inputs:
       month:
@@ -21,6 +21,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: 'pip'
 
       - run: pip install -r scripts/requirements.txt
 

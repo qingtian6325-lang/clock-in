@@ -1397,73 +1397,75 @@ function calcHours(dIn, dOut, note) {
 
 function buildDashboardData(records, year, month, includeInactive) {
   const MYT = 8 * 3600 * 1000; // Malaysia has no DST, fixed UTC+8
-  const NIGHT_CUTOFF = 12; // clock-outs before this hour (MYT) may belong to previous day's night shift
+  const MAX_SHIFT_MS = 20 * 3600 * 1000; // up to 20h shift span (covers 14h auto-out & long night shifts)
   const daysInMonth = new Date(year, month, 0).getDate();
   const targetEmps = employees.filter(e => e.staff_id && (includeInactive || e.active));
   const perEmp = {};
-  targetEmps.forEach(e => { perEmp[e.staff_id] = { days: {} }; });
+  targetEmps.forEach(e => { perEmp[e.staff_id] = { recs: [], days: {} }; });
   const myt = ts => new Date(new Date(ts).getTime() + MYT); // UTC getters now read MYT wall time
   const inMonth = d => d.getUTCFullYear() === year && d.getUTCMonth() + 1 === month;
 
-  // pass 1: clock-ins use their own calendar day (earliest per day)
   records.forEach(r => {
-    if (r.action !== 'in') return;
-    const bucket = perEmp[r.staff_id];
-    if (!bucket || !r.ts) return;
-    const local = myt(r.ts);
-    if (!inMonth(local)) return;
-    const key = local.getUTCDate();
-    const d = bucket.days[key] || (bucket.days[key] = { in: null, inRaw: null, out: null, out_note: '' });
-    if (!d.in || local < d.in) {
-      d.in = local;
-      d.inRaw = new Date(r.ts);
-    }
+    if (!r.ts || !perEmp[r.staff_id]) return;
+    perEmp[r.staff_id].recs.push(r);
   });
 
-  // pass 2: clock-outs in chronological order, with night-shift attribution:
-  // an early-morning out belongs to the previous day if it has a clock-in but no clock-out yet
-  records
-    .filter(r => r.action === 'out' && perEmp[r.staff_id] && r.ts)
-    .sort((a, b) => new Date(a.ts) - new Date(b.ts))
-    .forEach(r => {
-      const bucket = perEmp[r.staff_id];
-      const outRaw = new Date(r.ts);
+  Object.values(perEmp).forEach(bucket => {
+    // 1. Sort all records for this employee chronologically
+    bucket.recs.sort((a, b) => (new Date(a.ts) - new Date(b.ts)) || ((a.id || 0) - (b.id || 0)));
+
+    // 2. Pair In -> Out chronologically so cross-month/orphan morning Outs never pollute night shifts
+    const shifts = [];
+    let openShift = null;
+    bucket.recs.forEach(r => {
+      const raw = new Date(r.ts);
       const local = myt(r.ts);
-
-      // Night shift pairing: if previous day has an open clock-in within 16 hours,
-      // pair with previous day regardless of whether out is before/after 12:00
-      const prev = new Date(local.getTime() - 86400000); // previous MYT day (no DST in MYT)
-      if (prev.getUTCFullYear() === year && prev.getUTCMonth() + 1 === month) {
-        const pb = bucket.days[prev.getUTCDate()];
-        if (pb && pb.in && !pb.out) {
-          const diffH = (outRaw - pb.inRaw) / 3600000;
-          if (diffH > 0 && diffH <= 16.0) {
-            pb.out = local;
-            pb.out_note = r.note || '';
-            return;
+      if (r.action === 'in') {
+        if (openShift) shifts.push(openShift);
+        openShift = { in: local, inRaw: raw, out: null, outRaw: null, out_note: '' };
+      } else if (r.action === 'out') {
+        if (openShift && raw > openShift.inRaw && (raw - openShift.inRaw) <= MAX_SHIFT_MS) {
+          openShift.out = local;
+          openShift.outRaw = raw;
+          openShift.out_note = r.note || '';
+          shifts.push(openShift);
+          openShift = null;
+        } else if (shifts.length) {
+          // If an employee had a duplicate/updated Out for the just-closed shift, keep the latest valid Out
+          const last = shifts[shifts.length - 1];
+          if (raw > last.inRaw && (raw - last.inRaw) <= MAX_SHIFT_MS) {
+            last.out = local;
+            last.outRaw = raw;
+            last.out_note = r.note || '';
           }
         }
-      }
-
-      if (local.getUTCHours() < NIGHT_CUTOFF) {
-        if (prev.getUTCFullYear() === year && prev.getUTCMonth() + 1 === month) {
-          const pb = bucket.days[prev.getUTCDate()];
-          if (pb && pb.in && !pb.out) {
-            pb.out = local;
-            pb.out_note = r.note || '';
-            return;
-          }
-        }
-      }
-
-      if (!inMonth(local)) return;
-      const key = local.getUTCDate();
-      const d = bucket.days[key] || (bucket.days[key] = { in: null, inRaw: null, out: null, out_note: '' });
-      if (!d.out || local > d.out) {
-        d.out = local;
-        d.out_note = r.note || '';
       }
     });
+    if (openShift) shifts.push(openShift);
+
+    // 3. Assign each paired shift to the calendar day of its Clock In (in MYT)
+    shifts.forEach(s => {
+      if (!inMonth(s.in)) return;
+      const key = s.in.getUTCDate();
+      const existing = bucket.days[key];
+      if (!existing) {
+        bucket.days[key] = { in: s.in, inRaw: s.inRaw, out: s.out, out_note: s.out_note };
+      } else {
+        if (!existing.out && s.out) {
+          bucket.days[key] = { in: s.in, inRaw: s.inRaw, out: s.out, out_note: s.out_note };
+        } else if (existing.out && s.out) {
+          const sameDaySplit = existing.out.getUTCDate() === s.in.getUTCDate() && s.out.getUTCDate() === s.in.getUTCDate();
+          if (sameDaySplit) {
+            existing.out = s.out;
+            existing.out_note = s.out_note;
+          } else if ((s.out - s.in) > (existing.out - existing.in)) {
+            bucket.days[key] = { in: s.in, inRaw: s.inRaw, out: s.out, out_note: s.out_note };
+          }
+        }
+      }
+    });
+  });
+
   return targetEmps.map(e => {
     const info = perEmp[e.staff_id];
     const cells = [];
@@ -1609,10 +1611,15 @@ async function sendDashboard() {
 
   say('dashMsg', '⏳ Generating and sending…', true);
   try {
+    await fetchEmployees();
     const { data, error } = await sb.rpc('admin_records', { p_admin_pin: pin, p_limit: 10000 });
     if (error || !data.ok) { say('dashMsg', '❌ ' + (data && data.msg || 'Network error'), false); return; }
+    adminData = data.records || [];
+    adminFullLoaded = true;
+    renderRecords();
+    updateMissedBadge(findMissedPunches(adminData));
     const includeInactive = document.getElementById('dashIncludeInactive').value === 'all';
-    const rows = buildDashboardData(data.records || [], year, month, includeInactive);
+    const rows = buildDashboardData(adminData, year, month, includeInactive);
     const { blob, filename } = await buildDashboardXlsx(rows, year, month);
     const file_base64 = await blobToBase64(blob);
     const resp = await fetch(CFG.SUPABASE_URL + '/functions/v1/send-dashboard', {
@@ -1647,10 +1654,15 @@ async function exportDashboard() {
   else { const t = new Date(); year = t.getFullYear(); month = t.getMonth() + 1; }
 
   say('dashMsg', '⏳ Generating dashboard…', true);
+  await fetchEmployees();
   const { data, error } = await sb.rpc('admin_records', { p_admin_pin: pin, p_limit: 10000 });
   if (error || !data.ok) { say('dashMsg', '❌ ' + (data && data.msg || 'Network error'), false); return; }
+  adminData = data.records || [];
+  adminFullLoaded = true;
+  renderRecords();
+  updateMissedBadge(findMissedPunches(adminData));
   const includeInactive = document.getElementById('dashIncludeInactive').value === 'all';
-  const rows = buildDashboardData(data.records || [], year, month, includeInactive);
+  const rows = buildDashboardData(adminData, year, month, includeInactive);
   await writeDashboardXlsx(rows, year, month);
   say('dashMsg', '✅ Dashboard downloaded (' + rows.length + ' employees)', true);
 }

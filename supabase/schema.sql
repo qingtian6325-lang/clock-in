@@ -204,6 +204,8 @@ begin
     return jsonb_build_object('ok', false, 'msg', 'Incorrect admin PIN');
   end if;
 
+  perform auto_clock_out_expired();
+
   return jsonb_build_object('ok', true, 'records', (
     select coalesce(jsonb_agg(
       jsonb_build_object(

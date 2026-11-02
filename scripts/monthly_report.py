@@ -98,19 +98,29 @@ def sb_get(path, params):
 
 
 def fetch_data(year, month):
+    # Settle any expired >14h shifts first
+    try:
+        requests.post(
+            f"{SUPABASE_URL}/rest/v1/rpc/auto_clock_out_expired",
+            headers={"apikey": SERVICE_KEY, "Authorization": f"Bearer {SERVICE_KEY}"},
+            timeout=15,
+        )
+    except Exception:
+        pass
+
     # month boundaries in MYT, converted to UTC for the query.
-    # End is extended by 12h to catch night-shift clock-outs that
-    # belong to the last day of the month.
-    start_utc = datetime(year, month, 1, tzinfo=TZ).astimezone(timezone.utc)
+    # Start is extended back by 16h and end is extended forward by 20h
+    # so cross-month night shifts are cleanly paired in chronological order.
+    start_utc = (datetime(year, month, 1, tzinfo=TZ) - timedelta(hours=16)).astimezone(timezone.utc)
     end_utc = (datetime(year + (month == 12), month % 12 + 1, 1, tzinfo=TZ)
-               + timedelta(hours=NIGHT_OUT_CUTOFF_HOUR)).astimezone(timezone.utc)
+               + timedelta(hours=20)).astimezone(timezone.utc)
     employees = sb_get("employees", {
         "select": "id,name,staff_id,labor_type", "active": "eq.true", "order": "name",
     })
     records = sb_get("records", {
-        "select": "employee_id,action,ts,note",
+        "select": "id,employee_id,action,ts,note",
         "and": f"(ts.gte.{start_utc.isoformat()},ts.lt.{end_utc.isoformat()})",
-        "order": "ts.asc",
+        "order": "ts.asc,id.asc",
         "limit": "50000",
     })
     return employees, records
@@ -159,67 +169,76 @@ def calc_hours(in_dt, out_dt, note=""):
 def build_dashboard(employees, records, year, month):
     """One row per employee; per day: clock-in time, clock-out time.
 
-    Night shifts: a clock-out before NIGHT_OUT_CUTOFF_HOUR (MYT) is
-    attributed to the previous calendar day when that day has a
-    clock-in but no clock-out yet. Clock-ins always use their own date.
+    Pairs In -> Out chronologically per employee first (up to 20h span),
+    then attributes each shift to the calendar date of its Clock In (MYT).
+    This prevents cross-month or orphan morning Outs from ever polluting
+    the current day's night shift.
     """
     days = month_days(year, month)
+    max_shift = timedelta(hours=20)
 
     per_emp = {
         e["id"]: {
             "name": e["name"],
             "staff_id": e.get("staff_id") or "",
             "labor_type": e.get("labor_type") or "",
+            "recs": [],
             "days": {},
         }
         for e in employees
     }
 
-    # pass 1: clock-ins use their own calendar day (earliest per day)
     for r in records:
-        if r.get("action") != "in":
-            continue
         eid = r.get("employee_id")
-        if eid not in per_emp:
-            continue
-        out_raw = datetime.fromisoformat(r["ts"])
-        local = out_raw.astimezone(TZ)
-        if local.date().year != year or local.date().month != month:
-            continue
-        d = per_emp[eid]["days"].setdefault(local.date().isoformat(), {"in": None, "in_raw": None, "out": None, "out_note": ""})
-        if d["in"] is None or local < d["in"]:
-            d["in"] = local
-            d["in_raw"] = out_raw
+        if eid in per_emp and r.get("ts"):
+            per_emp[eid]["recs"].append(r)
 
-    # pass 2: clock-outs in chronological order, with night-shift attribution
-    outs = sorted(
-        (r for r in records if r.get("action") == "out" and r.get("employee_id") in per_emp),
-        key=lambda r: r["ts"],
-    )
-    for r in outs:
-        eid = r["employee_id"]
-        out_raw = datetime.fromisoformat(r["ts"])
-        local = out_raw.astimezone(TZ)
-        target = local.date()
+    for eid, info in per_emp.items():
+        info["recs"].sort(key=lambda r: (datetime.fromisoformat(r["ts"]), r.get("id") or 0))
+        shifts = []
+        open_shift = None
+        for r in info["recs"]:
+            raw = datetime.fromisoformat(r["ts"])
+            local = raw.astimezone(TZ)
+            act = r.get("action")
+            if act == "in":
+                if open_shift is not None:
+                    shifts.append(open_shift)
+                open_shift = {"in": local, "in_raw": raw, "out": None, "out_raw": None, "out_note": ""}
+            elif act == "out":
+                if open_shift is not None and raw > open_shift["in_raw"] and (raw - open_shift["in_raw"]) <= max_shift:
+                    open_shift["out"] = local
+                    open_shift["out_raw"] = raw
+                    open_shift["out_note"] = r.get("note") or ""
+                    shifts.append(open_shift)
+                    open_shift = None
+                elif shifts:
+                    last = shifts[-1]
+                    if raw > last["in_raw"] and (raw - last["in_raw"]) <= max_shift:
+                        last["out"] = local
+                        last["out_raw"] = raw
+                        last["out_note"] = r.get("note") or ""
+        if open_shift is not None:
+            shifts.append(open_shift)
 
-        # Night shift pairing: if previous day has an open clock-in within 16 hours,
-        # pair with previous day regardless of whether out is before/after 12:00
-        prev = target - timedelta(days=1)
-        pd = per_emp[eid]["days"].get(prev.isoformat())
-        if pd is not None and pd["in_raw"] is not None and pd["out"] is None:
-            diff_h = (out_raw - pd["in_raw"]).total_seconds() / 3600.0
-            if 0 < diff_h <= 16.0:
-                target = prev
-        elif local.hour < NIGHT_OUT_CUTOFF_HOUR:
-            if pd is not None and pd["in"] is not None and pd["out"] is None:
-                target = prev
-
-        if target.year != year or target.month != month:
-            continue
-        d = per_emp[eid]["days"].setdefault(target.isoformat(), {"in": None, "in_raw": None, "out": None, "out_note": ""})
-        if d["out"] is None or local > d["out"]:
-            d["out"] = local
-            d["out_note"] = r.get("note") or ""
+        for s in shifts:
+            in_date = s["in"].date()
+            if in_date.year != year or in_date.month != month:
+                continue
+            key = in_date.isoformat()
+            existing = info["days"].get(key)
+            if existing is None:
+                info["days"][key] = {"in": s["in"], "in_raw": s["in_raw"], "out": s["out"], "out_note": s["out_note"]}
+            else:
+                if existing["out"] is None and s["out"] is not None:
+                    info["days"][key] = {"in": s["in"], "in_raw": s["in_raw"], "out": s["out"], "out_note": s["out_note"]}
+                elif existing["out"] is not None and s["out"] is not None:
+                    same_day_split = (existing["out"].date() == in_date and s["out"].date() == in_date)
+                    if same_day_split:
+                        existing["out"] = s["out"]
+                        existing["out_note"] = s["out_note"]
+                    elif (s["out"] - s["in"]) > (existing["out"] - existing["in"]):
+                        info["days"][key] = {"in": s["in"], "in_raw": s["in_raw"], "out": s["out"], "out_note": s["out_note"]}
 
     rows = []
     for eid, info in per_emp.items():
