@@ -16,6 +16,21 @@ create table if not exists employees (
 create unique index if not exists uq_employees_staff_id on employees(staff_id);
 create unique index if not exists uq_employees_name on employees(name);
 
+-- email contact & Shift Lead priority order (lower number = higher priority; IDL always ranks above DL)
+alter table employees add column if not exists email text;
+alter table employees add column if not exists lead_priority int not null default 999;
+
+update employees set lead_priority = 1
+where replace(lower(name), ' ', '') like '%yiyang%' and lead_priority = 999;
+update employees set lead_priority = 2
+where replace(lower(name), ' ', '') like '%linyun%' and lead_priority = 999;
+update employees set lead_priority = 1
+where replace(lower(name), ' ', '') like '%hazim%' and upper(coalesce(labor_type, '')) <> 'IDL' and lead_priority = 999;
+update employees set lead_priority = 2
+where replace(lower(name), ' ', '') like '%faiz%' and upper(coalesce(labor_type, '')) <> 'IDL' and lead_priority = 999;
+update employees set lead_priority = 3
+where replace(lower(name), ' ', '') like '%adam%' and upper(coalesce(labor_type, '')) <> 'IDL' and lead_priority = 999;
+
 -- attendance records table
 create table if not exists records (
   id          bigint generated always as identity primary key,
@@ -32,11 +47,24 @@ create index if not exists idx_records_ts on records(ts desc);
 alter table records add column if not exists lat double precision;
 alter table records add column if not exists lng double precision;
 
--- settings table (admin PIN etc.)
+-- settings table (admin PIN, shift coverage, escalation contact etc.)
 create table if not exists settings (
   key   text primary key,
   value text not null
 );
+
+insert into settings(key, value) values
+  ('shift_day_period', '08:00 – 20:00'),
+  ('shift_night_enabled', 'false'),
+  ('shift_night_period', '20:00 – 08:00'),
+  ('shift_target_headcount', '0'),
+  ('shift_gap_details', 'N/A'),
+  ('escalation_name', 'Eric Chien'),
+  ('escalation_designation', 'Manager'),
+  ('escalation_contact', 'Eric_Chien@wiwynn.com'),
+  ('escalation_backup', 'N/A'),
+  ('coverage_public', 'false')
+on conflict (key) do nothing;
 
 alter table employees enable row level security;
 alter table records enable row level security;
@@ -223,9 +251,11 @@ $$;
 
 -- admin: add employee (admin PIN verified server-side)
 drop function if exists admin_add_employee(text, text, text, text);
+drop function if exists admin_add_employee(text, text, text, text, text);
+drop function if exists admin_add_employee(text, text, text, text, text, text, int);
 create or replace function admin_add_employee(
   p_admin_pin text, p_staff_id text, p_name text, p_emp_pin text,
-  p_labor_type text
+  p_labor_type text, p_email text default null, p_lead_priority int default 999
 )
 returns jsonb
 language plpgsql
@@ -255,10 +285,11 @@ begin
   end if;
 
   begin
-    insert into employees(staff_id, name, pin, labor_type)
+    insert into employees(staff_id, name, pin, labor_type, email, lead_priority)
     values (
       btrim(p_staff_id), btrim(p_name), nullif(btrim(p_emp_pin), ''),
-      v_labor
+      v_labor, nullif(btrim(coalesce(p_email, '')), ''),
+      coalesce(p_lead_priority, 999)
     );
   exception when unique_violation then
     return jsonb_build_object('ok', false, 'msg', 'This staff ID or name already exists');
@@ -398,17 +429,29 @@ begin
     select coalesce(jsonb_agg(
       jsonb_build_object(
         'id', id, 'staff_id', staff_id, 'name', name,
-        'labor_type', labor_type, 'active', active
-      ) order by name), '[]'::jsonb)
+        'labor_type', labor_type, 'active', active,
+        'email', coalesce(email, ''), 'lead_priority', lead_priority
+      ) order by
+        case
+          when upper(coalesce(labor_type, '')) = 'IDL' then 0
+          when upper(coalesce(labor_type, '')) = 'DL' then 1
+          else 2
+        end,
+        lead_priority asc,
+        name asc
+    ), '[]'::jsonb)
     from employees
   ));
 end;
 $$;
 
 -- admin: edit employee details (admin PIN verified server-side)
+drop function if exists admin_edit_employee(text, bigint, text, text, text, boolean);
+drop function if exists admin_edit_employee(text, bigint, text, text, text, boolean, text, int);
 create or replace function admin_edit_employee(
   p_admin_pin text, p_emp_id bigint, p_staff_id text, p_name text,
-  p_labor_type text, p_active boolean
+  p_labor_type text, p_active boolean,
+  p_email text default null, p_lead_priority int default null
 )
 returns jsonb
 language plpgsql
@@ -443,10 +486,12 @@ begin
 
   begin
     update employees
-    set staff_id   = btrim(p_staff_id),
-        name       = btrim(p_name),
-        labor_type = v_labor,
-        active     = coalesce(p_active, true)
+    set staff_id      = btrim(p_staff_id),
+        name          = btrim(p_name),
+        labor_type    = v_labor,
+        active        = coalesce(p_active, true),
+        email         = nullif(btrim(coalesce(p_email, '')), ''),
+        lead_priority = coalesce(p_lead_priority, lead_priority)
     where id = p_emp_id;
   exception when unique_violation then
     return jsonb_build_object('ok', false, 'msg', 'This staff ID or name already exists');
@@ -602,21 +647,229 @@ begin
 end;
 $$;
 
+-- admin: get shift coverage & escalation settings (admin PIN verified server-side)
+create or replace function admin_get_coverage_settings(p_admin_pin text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_pin text;
+begin
+  select value into v_pin from settings where key = 'admin_pin';
+  if v_pin is null or p_admin_pin is distinct from v_pin then
+    return jsonb_build_object('ok', false, 'msg', 'Incorrect admin PIN');
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'settings', jsonb_build_object(
+      'shift_day_period', coalesce((select value from settings where key = 'shift_day_period'), '08:00 – 20:00'),
+      'shift_night_enabled', coalesce((select value from settings where key = 'shift_night_enabled'), 'false'),
+      'shift_night_period', coalesce((select value from settings where key = 'shift_night_period'), '20:00 – 08:00'),
+      'shift_target_headcount', coalesce((select value from settings where key = 'shift_target_headcount'), '0'),
+      'shift_gap_details', coalesce((select value from settings where key = 'shift_gap_details'), 'N/A'),
+      'escalation_name', coalesce((select value from settings where key = 'escalation_name'), 'Eric Chien'),
+      'escalation_designation', coalesce((select value from settings where key = 'escalation_designation'), 'Manager'),
+      'escalation_contact', coalesce((select value from settings where key = 'escalation_contact'), 'Eric_Chien@wiwynn.com'),
+      'escalation_backup', coalesce((select value from settings where key = 'escalation_backup'), 'N/A'),
+      'coverage_public', coalesce((select value from settings where key = 'coverage_public'), 'false'),
+      'coverage_pin', coalesce((select value from settings where key = 'coverage_pin'), '')
+    )
+  );
+end;
+$$;
+
+-- admin: save shift coverage & escalation settings (admin PIN verified server-side)
+create or replace function admin_save_coverage_settings(p_admin_pin text, p_settings jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_pin text;
+  v_key text;
+  v_val text;
+  v_allowed text[] := array[
+    'shift_day_period',
+    'shift_night_enabled',
+    'shift_night_period',
+    'shift_target_headcount',
+    'shift_gap_details',
+    'escalation_name',
+    'escalation_designation',
+    'escalation_contact',
+    'escalation_backup',
+    'coverage_public',
+    'coverage_pin'
+  ];
+begin
+  select value into v_pin from settings where key = 'admin_pin';
+  if v_pin is null or p_admin_pin is distinct from v_pin then
+    return jsonb_build_object('ok', false, 'msg', 'Incorrect admin PIN');
+  end if;
+
+  foreach v_key in array v_allowed loop
+    if p_settings ? v_key then
+      v_val := coalesce(btrim(p_settings->>v_key), '');
+      insert into settings(key, value) values (v_key, v_val)
+      on conflict (key) do update set value = excluded.value;
+    end if;
+  end loop;
+
+  return jsonb_build_object('ok', true, 'msg', 'Shift & coverage settings saved');
+end;
+$$;
+
+-- admin: batch update employee lead_priority order (admin PIN verified server-side)
+create or replace function admin_save_employee_priorities(p_admin_pin text, p_items jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_pin  text;
+  v_item jsonb;
+begin
+  select value into v_pin from settings where key = 'admin_pin';
+  if v_pin is null or p_admin_pin is distinct from v_pin then
+    return jsonb_build_object('ok', false, 'msg', 'Incorrect admin PIN');
+  end if;
+
+  if p_items is null or jsonb_typeof(p_items) <> 'array' then
+    return jsonb_build_object('ok', false, 'msg', 'Invalid priority list');
+  end if;
+
+  for v_item in select * from jsonb_array_elements(p_items) loop
+    update employees
+    set lead_priority = coalesce(nullif(btrim(v_item->>'lead_priority'), '')::int, 999)
+    where id = (v_item->>'id')::bigint;
+  end loop;
+
+  return jsonb_build_object('ok', true, 'msg', 'Priority order saved');
+end;
+$$;
+
+-- live Shift Coverage & Escalation board (read-only)
+-- Protected by coverage_pin (or admin_pin) unless coverage_public = 'true'.
+-- Automatically assigns #1 in sorted active list (IDL > DL, then lead_priority, then name)
+-- as 'Shift Lead' and all remaining on-shift personnel as 'member'.
+create or replace function shift_coverage(p_pin text default '')
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_admin_pin text;
+  v_cov_pin   text;
+  v_public    text;
+  v_personnel jsonb;
+begin
+  select value into v_admin_pin from settings where key = 'admin_pin';
+  select value into v_cov_pin from settings where key = 'coverage_pin';
+  select value into v_public from settings where key = 'coverage_public';
+
+  if coalesce(v_public, 'false') <> 'true' then
+    if not (
+      (nullif(btrim(coalesce(v_cov_pin, '')), '') is not null and p_pin is not distinct from v_cov_pin)
+      or (nullif(btrim(coalesce(v_admin_pin, '')), '') is not null and p_pin is not distinct from v_admin_pin)
+    ) then
+      return jsonb_build_object(
+        'ok', false,
+        'auth_required', true,
+        'msg', case
+          when nullif(btrim(coalesce(p_pin, '')), '') is null then 'Viewer PIN required'
+          else 'Incorrect PIN'
+        end
+      );
+    end if;
+  end if;
+
+  perform auto_clock_out_expired();
+
+  with active_emps as (
+    select
+      e.name,
+      e.labor_type,
+      coalesce(e.email, '') as email,
+      e.lead_priority,
+      r.ts as clock_in_ts,
+      row_number() over (
+        order by
+          case
+            when upper(coalesce(e.labor_type, '')) = 'IDL' then 0
+            when upper(coalesce(e.labor_type, '')) = 'DL' then 1
+            else 2
+          end,
+          e.lead_priority asc,
+          e.name asc
+      ) as rn
+    from employees e
+    join lateral (
+      select r.action, r.ts
+      from records r
+      where r.employee_id = e.id
+      order by r.ts desc, r.id desc
+      limit 1
+    ) r on true
+    where e.active
+      and r.action = 'in'
+      and (now() - r.ts) <= interval '14 hours'
+  )
+  select coalesce(jsonb_agg(
+    jsonb_build_object(
+      'name', name,
+      'labor_type', coalesce(labor_type, ''),
+      'role', case when rn = 1 then 'Shift Lead' else 'member' end,
+      'email', email,
+      'clock_in_ts', clock_in_ts
+    ) order by rn
+  ), '[]'::jsonb)
+  into v_personnel
+  from active_emps;
+
+  return jsonb_build_object(
+    'ok', true,
+    'server_now', now(),
+    'personnel', v_personnel,
+    'settings', jsonb_build_object(
+      'shift_day_period', coalesce((select value from settings where key = 'shift_day_period'), '08:00 – 20:00'),
+      'shift_night_enabled', coalesce((select value from settings where key = 'shift_night_enabled'), 'false'),
+      'shift_night_period', coalesce((select value from settings where key = 'shift_night_period'), '20:00 – 08:00'),
+      'shift_target_headcount', coalesce((select value from settings where key = 'shift_target_headcount'), '0'),
+      'shift_gap_details', coalesce((select value from settings where key = 'shift_gap_details'), 'N/A'),
+      'escalation_name', coalesce((select value from settings where key = 'escalation_name'), 'Eric Chien'),
+      'escalation_designation', coalesce((select value from settings where key = 'escalation_designation'), 'Manager'),
+      'escalation_contact', coalesce((select value from settings where key = 'escalation_contact'), 'Eric_Chien@wiwynn.com'),
+      'escalation_backup', coalesce((select value from settings where key = 'escalation_backup'), 'N/A')
+    )
+  );
+end;
+$$;
+
 -- allow anonymous calls (each function verifies permissions internally)
 grant execute on function clock(bigint, text, double precision, double precision) to anon, authenticated;
 grant execute on function my_records(bigint) to anon, authenticated;
 grant execute on function lookup_employee(text) to anon, authenticated;
 grant execute on function admin_records(text, int) to anon, authenticated;
-grant execute on function admin_add_employee(text, text, text, text, text) to anon, authenticated;
+grant execute on function admin_add_employee(text, text, text, text, text, text, int) to anon, authenticated;
 grant execute on function admin_add_record(text, bigint, text, text) to anon, authenticated;
 grant execute on function admin_list_employees(text) to anon, authenticated;
-grant execute on function admin_edit_employee(text, bigint, text, text, text, boolean) to anon, authenticated;
+grant execute on function admin_edit_employee(text, bigint, text, text, text, boolean, text, int) to anon, authenticated;
 grant execute on function admin_get_location(text) to anon, authenticated;
 grant execute on function admin_set_location(text, double precision, double precision, text) to anon, authenticated;
 grant execute on function admin_out_of_range(text, int) to anon, authenticated;
 grant execute on function admin_update_record_location(text, bigint, double precision, double precision) to anon, authenticated;
 grant execute on function admin_delete_record(text, bigint) to anon, authenticated;
 grant execute on function admin_update_record(text, bigint, text, text) to anon, authenticated;
+grant execute on function admin_get_coverage_settings(text) to anon, authenticated;
+grant execute on function admin_save_coverage_settings(text, jsonb) to anon, authenticated;
+grant execute on function admin_save_employee_priorities(text, jsonb) to anon, authenticated;
+grant execute on function shift_coverage(text) to anon, authenticated;
 
 -- employees currently on-site: active employees whose latest record is a clock-in within 14 hours (supports cross-midnight night shifts).
 -- Automatically runs auto_clock_out_expired() first so expired shifts are closed immediately.
