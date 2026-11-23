@@ -657,16 +657,6 @@
       <label>Backup Escalation Contact</label>
       <input id="covEscBackup" placeholder="N/A">
 
-      <label>Viewer Page Access (coverage.html)</label>
-      <select id="covPublic" onchange="document.getElementById('covPinWrap').classList.toggle('hidden', this.value === 'true')">
-        <option value="false">Protected by Viewer PIN (or Admin PIN)</option>
-        <option value="true">Open / Public (No PIN required)</option>
-      </select>
-      <div id="covPinWrap">
-        <label>Viewer PIN (read-only; leave blank to only allow Admin PIN)</label>
-        <input id="covViewerPin" placeholder="e.g. 2026">
-      </div>
-
       <button class="btn-blue" onclick="saveCoverageSettings()">💾 Save Shift &amp; Coverage Settings</button>
       <div class="msg" id="covSetMsg"></div>
 
@@ -2060,10 +2050,6 @@ async function loadCoverageSettingsPanel() {
     document.getElementById('covEscDesignation').value = s.escalation_designation || 'Manager';
     document.getElementById('covEscContact').value = s.escalation_contact || 'Eric_Chien@wiwynn.com';
     document.getElementById('covEscBackup').value = s.escalation_backup || 'N/A';
-    const isPublic = s.coverage_public === 'true';
-    document.getElementById('covPublic').value = isPublic ? 'true' : 'false';
-    document.getElementById('covPinWrap').classList.toggle('hidden', isPublic);
-    document.getElementById('covViewerPin').value = s.coverage_pin || '';
   } catch (e) {
     say('covSetMsg', '❌ Network error loading settings', false);
   }
@@ -2081,9 +2067,7 @@ async function saveCoverageSettings() {
     escalation_name: document.getElementById('covEscName').value.trim() || 'Eric Chien',
     escalation_designation: document.getElementById('covEscDesignation').value.trim() || 'Manager',
     escalation_contact: document.getElementById('covEscContact').value.trim() || 'Eric_Chien@wiwynn.com',
-    escalation_backup: document.getElementById('covEscBackup').value.trim() || 'N/A',
-    coverage_public: document.getElementById('covPublic').value === 'true' ? 'true' : 'false',
-    coverage_pin: document.getElementById('covViewerPin').value.trim()
+    escalation_backup: document.getElementById('covEscBackup').value.trim() || 'N/A'
   };
   say('covSetMsg', '⏳ Saving…', true);
   const { data, error } = await sb.rpc('admin_save_coverage_settings', {
