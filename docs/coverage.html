@@ -567,7 +567,7 @@ function fmtTimeMYT(ts) {
 
 function getHourMYT(ts) {
   const h = new Date(ts).toLocaleString('en-GB', {
-    timeZone: TZ, hour: '2-digit', hour12: false
+    timeZone: TZ, hour: '2-digit', hourCycle: 'h23'
   });
   return parseInt(h, 10) || 0;
 }
@@ -607,7 +607,7 @@ function computeViewModel(data) {
   const nowTs = data.server_now || new Date().toISOString();
   const dateStr = fmtDateMYT(nowTs);
   const hour = getHourMYT(nowTs);
-  const nightEnabled = s.shift_night_enabled === 'true';
+  const nightEnabled = s.shift_night_enabled !== 'false';
   const shift = (nightEnabled && (hour < 8 || hour >= 20)) ? 'Night' : 'Day';
   const period = shift === 'Night'
     ? (s.shift_night_period || '20:00 – 08:00')
@@ -646,9 +646,9 @@ function computeViewModel(data) {
     statusText,
     statusKind,
     gapDetails,
-    escName: (s.escalation_name || 'Eric Chien').trim(),
-    escRole: (s.escalation_designation || 'Manager').trim(),
-    escContact: (s.escalation_contact || 'Eric_Chien@wiwynn.com').trim(),
+    escName: 'Eric Chien',
+    escRole: 'Manager',
+    escContact: 'Eric_Chien@wiwynn.com',
     escBackup: (s.escalation_backup || 'N/A').trim()
   };
 }
