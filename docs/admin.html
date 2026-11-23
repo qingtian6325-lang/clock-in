@@ -192,7 +192,7 @@
   .mini-btn:hover { background: #e2e8f0; }
 
   .btn-action-group { display: flex; flex-wrap: wrap; gap: 6px; }
-  .panel { overflow-x: auto; }
+  .table-scroll { overflow-x: auto; }
   .btn-sm {
     padding: 6px 10px;
     border: none;
@@ -383,7 +383,7 @@
   .suggest {
     position: absolute; top: 100%; left: 0; right: 0; background: #fff;
     border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;
-    max-height: 220px; overflow-y: auto; z-index: 20;
+    max-height: 220px; overflow-y: auto; z-index: 50;
     box-shadow: 0 10px 25px rgba(0,0,0,0.1);
   }
   .suggest button {
@@ -530,9 +530,11 @@
         <input type="date" id="recDate" aria-label="Filter by date">
         <button type="button" class="dropbtn" id="recDateClear" aria-label="Clear date">✕</button>
       </div>
-      <table id="adminTable">
-        <thead><tr><th>DL/IDL</th><th>ID</th><th>Name</th><th>Type</th><th>Time</th><th id="thLoc">Location</th><th>Edit and Delete Record</th></tr></thead><tbody></tbody>
-      </table>
+      <div class="table-scroll">
+        <table id="adminTable">
+          <thead><tr><th>DL/IDL</th><th>ID</th><th>Name</th><th>Type</th><th>Time</th><th id="thLoc">Location</th><th>Edit and Delete Record</th></tr></thead><tbody></tbody>
+        </table>
+      </div>
       <div id="recPager" class="pager"></div>
       <label style="margin-top:12px">Export list: pick a date or range</label>
       <div class="row2">
@@ -572,9 +574,11 @@
         <button type="button" class="dropbtn" onclick="document.getElementById('missedSearch').value='';renderMissed();" aria-label="Clear filter">✕</button>
         <button type="button" class="dropbtn" onclick="adminFullLoaded=false;loadMissedPanel();" title="Refresh scan">🔄</button>
       </div>
-      <table id="missedTable">
-        <thead><tr><th>Employee</th><th>Punch &amp; Time</th><th>Issue</th><th id="thLoc2">Location</th><th>Actions</th></tr></thead><tbody></tbody>
-      </table>
+      <div class="table-scroll">
+        <table id="missedTable">
+          <thead><tr><th>Employee</th><th>Punch &amp; Time</th><th>Issue</th><th id="thLoc2">Location</th><th>Actions</th></tr></thead><tbody></tbody>
+        </table>
+      </div>
       <div class="hint">💡 <b>🤖 Auto 14h</b>: Click <b>✏️ Edit</b> to set the employee's real leaving time (this unfreezes OT and clears the alert).<br>💡 <b>⚠️ Missing Out / In</b>: Click <b>➕ Backfill</b> to jump straight to Backfill Record with the employee and date pre-filled!</div>
     </div>
 
@@ -597,10 +601,12 @@
       </div>
       <div class="msg" id="locMsg"></div>
       <label style="margin-top:14px">Check-ins outside the 5 km radius</label>
-      <table id="oorTable">
-        <thead><tr><th>DL/IDL</th><th>ID</th><th>Name</th><th>Type</th><th>Time</th><th>Distance</th><th>Location</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
+      <div class="table-scroll">
+        <table id="oorTable">
+          <thead><tr><th>DL/IDL</th><th>ID</th><th>Name</th><th>Type</th><th>Time</th><th>Distance</th><th>Location</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
       <div class="row2" style="margin-top:12px">
         <button class="btn-blue" onclick="exportOutOfRange()">⬇ Export Out-of-Range (Excel)</button>
       </div>
@@ -662,10 +668,12 @@
 
       <label style="margin-top:22px">Team Lead Priority Order (IDL &gt; DL, then order below)</label>
       <div class="hint" style="margin-top:0;margin-bottom:8px;">Use ▲ / ▼ to reorder within IDL or DL. Whoever is #1 among currently clocked-in staff becomes <b>Shift Lead</b>; everyone else becomes <b>member</b>.</div>
-      <table id="priorityTable">
-        <thead><tr><th>Rank</th><th>DL/IDL</th><th>Name</th><th>Email</th><th>Order</th></tr></thead>
-        <tbody></tbody>
-      </table>
+      <div class="table-scroll">
+        <table id="priorityTable">
+          <thead><tr><th>Rank</th><th>DL/IDL</th><th>Name</th><th>Email</th><th>Order</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
       <button class="btn-blue" onclick="savePriorityOrder()">💾 Save Priority Order</button>
       <div class="msg" id="prioMsg"></div>
     </div>
@@ -885,7 +893,7 @@ editSearch.addEventListener('input', () => {
 });
 document.getElementById('editDrop').addEventListener('click', () => {
   if (!editSuggest.classList.contains('hidden')) { editSuggest.classList.add('hidden'); return; }
-  renderEditSuggest(filterEmps(editSearch.value).slice(0, 50));
+  renderEditSuggest(filterEmps(editEmpId ? '' : editSearch.value).slice(0, 50));
 });
 document.getElementById('editClear').addEventListener('click', () => {
   editSearch.value = '';
