@@ -503,12 +503,7 @@
   </div>
 </div>
 
-<div class="nav-links">
-  <a href="index.html">← Clock In</a>
-  <a href="admin.html">⚙️ Management Console (Admin)</a>
-</div>
-
-<div class="footer">⚡ Powered by <a href="mailto:Jinghao_Tee@wiwynn.com">Jinghao_Tee@wiwynn.com</a> &amp; <a href="https://muse.ai" target="_blank" rel="noopener">Muse</a></div>
+<div class="footer">⚡ Powered by <a href="mailto:Jinghao_Tee@wiwynn.com">Jinghao_Tee@wiwynn.com</a></div>
 
 <script src="supabase.min.js?v=20261005a"></script>
 <script src="config.js?v=20261005a"></script>
@@ -677,11 +672,9 @@ function renderBoard(vm) {
       const laborBadge = p.labor_type
         ? `<span class="badge ${p.labor_type === 'IDL' ? 'badge-idl' : 'badge-dl'}">${escapeHtml(p.labor_type)}</span>`
         : '';
-      const inTime = p.clock_in_ts ? `Clocked in ${fmtTimeMYT(p.clock_in_ts)} MYT` : '';
       return `<tr>
         <td>
           <div class="emp-name">${escapeHtml(p.name)} ${laborBadge}</div>
-          ${inTime ? `<div class="emp-sub">${escapeHtml(inTime)}</div>` : ''}
         </td>
         <td>${roleBadge}</td>
         <td>${p.email ? formatContactHtml(p.email) : '<span style="color:#94a3b8">—</span>'}</td>
