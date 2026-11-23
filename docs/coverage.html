@@ -335,6 +335,32 @@
     padding: 2px 7px;
   }
 
+  .contact-actions {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .teams-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #4338ca;
+    border: 1px solid #c7d2fe;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+  }
+  .teams-btn:hover {
+    background: #e0e7ff;
+    border-color: #a5b4fc;
+  }
+
   .mail-link {
     color: var(--primary);
     text-decoration: none;
@@ -505,15 +531,31 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+function teamsChatUrl(email) {
+  return 'https://teams.microsoft.com/l/chat/0/0?users=' + encodeURIComponent(email);
+}
+
+function renderEmailActions(email) {
+  const safe = escapeHtml(email);
+  return `<span class="contact-actions">` +
+    `<a class="teams-btn" href="${escapeHtml(teamsChatUrl(email))}" target="_blank" rel="noopener" title="Chat on Microsoft Teams">💬 Teams</a>` +
+    `<a class="mail-link" href="mailto:${safe}">${safe}</a>` +
+  `</span>`;
+}
+
 function formatContactHtml(val) {
   const s = (val || '').trim();
   if (!s || s === 'N/A') return escapeHtml(s || '—');
-  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) {
-    return `<a class="mail-link" href="mailto:${escapeHtml(s)}">${escapeHtml(s)}</a>`;
+  const re = /([^\s@<>]+@[^\s@<>]+\.[^\s@<>]+)/g;
+  let out = '';
+  let last = 0;
+  let m;
+  while ((m = re.exec(s)) !== null) {
+    out += escapeHtml(s.slice(last, m.index)) + renderEmailActions(m[1]);
+    last = re.lastIndex;
   }
-  return escapeHtml(s).replace(/([^\s@<>]+@[^\s@<>]+\.[^\s@<>]+)/g, m =>
-    `<a class="mail-link" href="mailto:${m}">${m}</a>`
-  );
+  out += escapeHtml(s.slice(last));
+  return out;
 }
 
 function fmtDateMYT(ts) {
@@ -686,11 +728,25 @@ async function copyForTeams() {
     `Backup Escalation Contact: ${vm.escBackup}`
   ].join('\n');
 
+  const formatCopyCell = val => {
+    const s = (val || '').trim();
+    if (!s || s === 'N/A') return escapeHtml(s || 'N/A');
+    const re = /([^\s@<>]+@[^\s@<>]+\.[^\s@<>]+)/g;
+    let out = '', last = 0, m;
+    while ((m = re.exec(s)) !== null) {
+      const email = m[1];
+      out += escapeHtml(s.slice(last, m.index)) +
+        `<a href="${escapeHtml(teamsChatUrl(email))}">Teams</a> · <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`;
+      last = re.lastIndex;
+    }
+    return out + escapeHtml(s.slice(last));
+  };
+
   const htmlRows = vm.personnel.length
     ? vm.personnel.map(p => `<tr>
         <td style="border:1px solid #cbd5e1;padding:6px 10px;">${escapeHtml(p.name)}</td>
         <td style="border:1px solid #cbd5e1;padding:6px 10px;">${escapeHtml(p.role)}</td>
-        <td style="border:1px solid #cbd5e1;padding:6px 10px;">${escapeHtml(p.email || 'N/A')}</td>
+        <td style="border:1px solid #cbd5e1;padding:6px 10px;">${formatCopyCell(p.email || 'N/A')}</td>
       </tr>`).join('')
     : '<tr><td colspan="3" style="border:1px solid #cbd5e1;padding:6px 10px;color:#64748b;">No personnel currently clocked in</td></tr>';
 
@@ -720,8 +776,8 @@ async function copyForTeams() {
       <table style="border-collapse:collapse;">
         <tr><td style="border:1px solid #cbd5e1;padding:6px 10px;background:#f8fafc;"><strong>Escalation Manager</strong></td><td style="border:1px solid #cbd5e1;padding:6px 10px;">${escapeHtml(vm.escName)}</td></tr>
         <tr><td style="border:1px solid #cbd5e1;padding:6px 10px;background:#f8fafc;"><strong>Designation</strong></td><td style="border:1px solid #cbd5e1;padding:6px 10px;">${escapeHtml(vm.escRole)}</td></tr>
-        <tr><td style="border:1px solid #cbd5e1;padding:6px 10px;background:#f8fafc;"><strong>Contact</strong></td><td style="border:1px solid #cbd5e1;padding:6px 10px;">${escapeHtml(vm.escContact)}</td></tr>
-        <tr><td style="border:1px solid #cbd5e1;padding:6px 10px;background:#f8fafc;"><strong>Backup Escalation Contact</strong></td><td style="border:1px solid #cbd5e1;padding:6px 10px;">${escapeHtml(vm.escBackup)}</td></tr>
+        <tr><td style="border:1px solid #cbd5e1;padding:6px 10px;background:#f8fafc;"><strong>Contact</strong></td><td style="border:1px solid #cbd5e1;padding:6px 10px;">${formatCopyCell(vm.escContact)}</td></tr>
+        <tr><td style="border:1px solid #cbd5e1;padding:6px 10px;background:#f8fafc;"><strong>Backup Escalation Contact</strong></td><td style="border:1px solid #cbd5e1;padding:6px 10px;">${formatCopyCell(vm.escBackup)}</td></tr>
       </table>
     </div>
   `.trim();
