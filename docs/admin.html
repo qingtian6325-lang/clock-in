@@ -647,7 +647,7 @@
         <span style="color:#2563eb;font-weight:600;">Eric_Chien@wiwynn.com</span>
       </div>
 
-      <label>Backup Escalation Contact (pick an employee or type N/A)</label>
+      <label>Backup Escalation (pick an employee or type N/A)</label>
       <div class="picker">
         <div class="picker-row">
           <input id="backupSearch" placeholder="Type name or staff ID to select backup…" autocomplete="off">
@@ -656,7 +656,10 @@
         </div>
         <div id="backupSuggest" class="suggest hidden"></div>
       </div>
-      <input id="covEscBackup" placeholder="N/A" style="margin-top:8px;">
+      <div class="row2" style="margin-top:8px;">
+        <input id="covEscBackupName" placeholder="Name or N/A">
+        <input id="covEscBackupContact" type="email" placeholder="Backup Email">
+      </div>
 
       <button class="btn-blue" onclick="saveCoverageSettings()">💾 Save Shift &amp; Coverage Settings</button>
       <div class="msg" id="covSetMsg"></div>
@@ -1905,9 +1908,8 @@ function renderBackupSuggest(hits) {
         const emp = employees.find(x => x.id === +b.dataset.id);
         if (!emp) return;
         backupSearch.value = empLabel(emp);
-        document.getElementById('covEscBackup').value = emp.email
-          ? `${emp.name} / ${emp.email}`
-          : emp.name;
+        document.getElementById('covEscBackupName').value = emp.name || '';
+        document.getElementById('covEscBackupContact').value = emp.email || '';
         backupSuggest.classList.add('hidden');
       })
     );
@@ -1925,7 +1927,8 @@ document.getElementById('backupDrop').addEventListener('click', () => {
 });
 document.getElementById('backupClear').addEventListener('click', () => {
   backupSearch.value = '';
-  document.getElementById('covEscBackup').value = 'N/A';
+  document.getElementById('covEscBackupName').value = 'N/A';
+  document.getElementById('covEscBackupContact').value = '';
   backupSuggest.classList.add('hidden');
 });
 backupSearch.addEventListener('keydown', e => {
@@ -2051,7 +2054,20 @@ async function loadCoverageSettingsPanel() {
     document.getElementById('covNightPeriod').value = s.shift_night_period || '20:00 – 08:00';
     document.getElementById('covTargetHeadcount').value = s.shift_target_headcount || '0';
     document.getElementById('covGapDetails').value = s.shift_gap_details || 'N/A';
-    document.getElementById('covEscBackup').value = s.escalation_backup || 'N/A';
+    const rawBackup = (s.escalation_backup || 'N/A').trim();
+    if (!rawBackup || rawBackup.toUpperCase() === 'N/A') {
+      document.getElementById('covEscBackupName').value = 'N/A';
+      document.getElementById('covEscBackupContact').value = '';
+    } else {
+      const parts = rawBackup.split(/\s*\/\s*/).map(x => x.trim()).filter(Boolean);
+      if (parts.length >= 2) {
+        document.getElementById('covEscBackupContact').value = parts.pop();
+        document.getElementById('covEscBackupName').value = parts.join(' / ');
+      } else {
+        document.getElementById('covEscBackupName').value = rawBackup;
+        document.getElementById('covEscBackupContact').value = '';
+      }
+    }
   } catch (e) {
     say('covSetMsg', '❌ Network error loading settings', false);
   }
@@ -2060,6 +2076,14 @@ async function loadCoverageSettingsPanel() {
 async function saveCoverageSettings() {
   if (!sb) return;
   const pin = document.getElementById('adminPin').value.trim();
+  const bName = document.getElementById('covEscBackupName').value.trim();
+  const bContact = document.getElementById('covEscBackupContact').value.trim();
+  let backupStr = 'N/A';
+  if (bName && bName.toUpperCase() !== 'N/A') {
+    backupStr = bContact ? `${bName} / ${bContact}` : bName;
+  } else if (bContact) {
+    backupStr = bContact;
+  }
   const payload = {
     shift_day_period: document.getElementById('covDayPeriod').value.trim() || '08:00 – 20:00',
     shift_night_enabled: document.getElementById('covNightEnabled').value === 'true' ? 'true' : 'false',
@@ -2069,7 +2093,7 @@ async function saveCoverageSettings() {
     escalation_name: 'Eric Chien',
     escalation_designation: 'Manager',
     escalation_contact: 'Eric_Chien@wiwynn.com',
-    escalation_backup: document.getElementById('covEscBackup').value.trim() || 'N/A'
+    escalation_backup: backupStr
   };
   say('covSetMsg', '⏳ Saving…', true);
   const { data, error } = await sb.rpc('admin_save_coverage_settings', {
