@@ -62,8 +62,7 @@ insert into settings(key, value) values
   ('escalation_name', 'Eric Chien'),
   ('escalation_designation', 'Manager'),
   ('escalation_contact', 'Eric_Chien@wiwynn.com'),
-  ('escalation_backup', 'N/A'),
-  ('coverage_public', 'false')
+  ('escalation_backup', 'N/A')
 on conflict (key) do nothing;
 
 alter table employees enable row level security;
@@ -673,9 +672,7 @@ begin
       'escalation_name', coalesce((select value from settings where key = 'escalation_name'), 'Eric Chien'),
       'escalation_designation', coalesce((select value from settings where key = 'escalation_designation'), 'Manager'),
       'escalation_contact', coalesce((select value from settings where key = 'escalation_contact'), 'Eric_Chien@wiwynn.com'),
-      'escalation_backup', coalesce((select value from settings where key = 'escalation_backup'), 'N/A'),
-      'coverage_public', coalesce((select value from settings where key = 'coverage_public'), 'false'),
-      'coverage_pin', coalesce((select value from settings where key = 'coverage_pin'), '')
+      'escalation_backup', coalesce((select value from settings where key = 'escalation_backup'), 'N/A')
     )
   );
 end;
@@ -701,9 +698,7 @@ declare
     'escalation_name',
     'escalation_designation',
     'escalation_contact',
-    'escalation_backup',
-    'coverage_public',
-    'coverage_pin'
+    'escalation_backup'
   ];
 begin
   select value into v_pin from settings where key = 'admin_pin';
@@ -753,42 +748,20 @@ begin
 end;
 $$;
 
--- live Shift Coverage & Escalation board (read-only)
--- Protected by coverage_pin (or admin_pin) unless coverage_public = 'true'.
+-- live Shift Coverage & Escalation board (public read-only, no PIN required)
 -- Automatically assigns #1 in sorted active list (IDL > DL, then lead_priority, then name)
 -- as 'Shift Lead' and all remaining on-shift personnel as 'member'.
-create or replace function shift_coverage(p_pin text default '')
+drop function if exists shift_coverage(text);
+drop function if exists shift_coverage();
+create or replace function shift_coverage()
 returns jsonb
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  v_admin_pin text;
-  v_cov_pin   text;
-  v_public    text;
   v_personnel jsonb;
 begin
-  select value into v_admin_pin from settings where key = 'admin_pin';
-  select value into v_cov_pin from settings where key = 'coverage_pin';
-  select value into v_public from settings where key = 'coverage_public';
-
-  if coalesce(v_public, 'false') <> 'true' then
-    if not (
-      (nullif(btrim(coalesce(v_cov_pin, '')), '') is not null and p_pin is not distinct from v_cov_pin)
-      or (nullif(btrim(coalesce(v_admin_pin, '')), '') is not null and p_pin is not distinct from v_admin_pin)
-    ) then
-      return jsonb_build_object(
-        'ok', false,
-        'auth_required', true,
-        'msg', case
-          when nullif(btrim(coalesce(p_pin, '')), '') is null then 'Viewer PIN required'
-          else 'Incorrect PIN'
-        end
-      );
-    end if;
-  end if;
-
   perform auto_clock_out_expired();
 
   with active_emps as (
@@ -869,7 +842,7 @@ grant execute on function admin_update_record(text, bigint, text, text) to anon,
 grant execute on function admin_get_coverage_settings(text) to anon, authenticated;
 grant execute on function admin_save_coverage_settings(text, jsonb) to anon, authenticated;
 grant execute on function admin_save_employee_priorities(text, jsonb) to anon, authenticated;
-grant execute on function shift_coverage(text) to anon, authenticated;
+grant execute on function shift_coverage() to anon, authenticated;
 
 -- employees currently on-site: active employees whose latest record is a clock-in within 14 hours (supports cross-midnight night shifts).
 -- Automatically runs auto_clock_out_expired() first so expired shifts are closed immediately.
