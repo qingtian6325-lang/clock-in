@@ -446,6 +446,11 @@
       <input id="newEmail" type="email" placeholder="name@wiwynn.com" autocomplete="off">
       <label>Shift Lead Priority Order (optional, smaller = higher)</label>
       <input id="newPriority" type="number" min="1" placeholder="Default 999 (IDL always ranks above DL)">
+      <label>Show in Shift Coverage</label>
+      <select id="newShowInCoverage">
+        <option value="true">Yes (Show on coverage.html)</option>
+        <option value="false">No (Hide from coverage.html)</option>
+      </select>
       <label>Labor Type</label>
       <div class="row2">
         <select id="newLaborType">
@@ -477,6 +482,11 @@
         <input id="editEmail" type="email" placeholder="name@wiwynn.com" autocomplete="off">
         <label>Shift Lead Priority Order (smaller = higher)</label>
         <input id="editPriority" type="number" min="1">
+        <label>Show in Shift Coverage</label>
+        <select id="editShowInCoverage">
+          <option value="true">Yes (Show on coverage.html)</option>
+          <option value="false">No (Hide from coverage.html)</option>
+        </select>
         <label>Labor Type</label>
         <select id="editLaborType">
           <option value="">Select type</option>
@@ -873,6 +883,7 @@ function renderEditSuggest(hits) {
         document.getElementById('editName').value = emp.name || '';
         document.getElementById('editEmail').value = emp.email || '';
         document.getElementById('editPriority').value = emp.lead_priority != null ? emp.lead_priority : 999;
+        document.getElementById('editShowInCoverage').value = emp.show_in_coverage === false ? 'false' : 'true';
         document.getElementById('editLaborType').value = emp.labor_type || '';
         document.getElementById('editActive').value = emp.active ? 'true' : 'false';
         document.getElementById('editForm').classList.remove('hidden');
@@ -916,6 +927,7 @@ async function saveEmployee() {
   const email = document.getElementById('editEmail').value.trim();
   const prioRaw = parseInt(document.getElementById('editPriority').value, 10);
   const leadPriority = isFinite(prioRaw) && prioRaw > 0 ? prioRaw : 999;
+  const showInCoverage = document.getElementById('editShowInCoverage').value === 'true';
   if (!staffId) { say('adminMsg2', '❌ Please enter staff ID', false); return; }
   if (!name) { say('adminMsg2', '❌ Please enter name', false); return; }
   const { data, error } = await sb.rpc('admin_edit_employee', {
@@ -923,7 +935,8 @@ async function saveEmployee() {
     p_labor_type: document.getElementById('editLaborType').value,
     p_active: document.getElementById('editActive').value === 'true',
     p_email: email || null,
-    p_lead_priority: leadPriority
+    p_lead_priority: leadPriority,
+    p_show_in_coverage: showInCoverage
   });
   if (error || !data.ok) { say('adminMsg2', '❌ ' + (data && data.msg || 'Network error'), false); return; }
   say('adminMsg2', '✅ ' + data.msg, true);
@@ -1283,17 +1296,20 @@ async function addEmployee() {
   const email = document.getElementById('newEmail').value.trim();
   const prioRaw = parseInt(document.getElementById('newPriority').value, 10);
   const leadPriority = isFinite(prioRaw) && prioRaw > 0 ? prioRaw : 999;
+  const showInCoverage = document.getElementById('newShowInCoverage').value === 'true';
   const laborType = document.getElementById('newLaborType').value;
   if (!staffId) { say('adminMsg2', '❌ Please enter staff ID', false); return; }
   const { data, error } = await sb.rpc('admin_add_employee',
     { p_admin_pin: pin, p_staff_id: staffId, p_name: name, p_emp_pin: '',
-      p_labor_type: laborType, p_email: email || null, p_lead_priority: leadPriority });
+      p_labor_type: laborType, p_email: email || null, p_lead_priority: leadPriority,
+      p_show_in_coverage: showInCoverage });
   if (error || !data.ok) { say('adminMsg2', '❌ ' + (data && data.msg || 'Network error'), false); return; }
   say('adminMsg2', '✅ ' + data.msg, true);
   document.getElementById('newStaffId').value = '';
   document.getElementById('newName').value = '';
   document.getElementById('newEmail').value = '';
   document.getElementById('newPriority').value = '';
+  document.getElementById('newShowInCoverage').value = 'true';
   document.getElementById('newLaborType').value = '';
   fetchEmployees();
 }
@@ -1955,7 +1971,7 @@ let priorityWorking = [];
 
 function renderPriorityTable() {
   const tb = document.querySelector('#priorityTable tbody');
-  const active = sortPriorityList(employees.filter(e => e.active));
+  const active = sortPriorityList(employees.filter(e => e.active && e.show_in_coverage !== false));
   priorityWorking = active.map((e, i) => ({ ...e, _rank: i + 1 }));
   if (!priorityWorking.length) {
     tb.innerHTML = '<tr><td colspan="5">No active employees yet</td></tr>';
@@ -1981,7 +1997,7 @@ function renderPriorityTable() {
 }
 
 function movePriority(empId, dir) {
-  const sorted = sortPriorityList(employees.filter(e => e.active));
+  const sorted = sortPriorityList(employees.filter(e => e.active && e.show_in_coverage !== false));
   // Normalize priorities per group so swapping is deterministic
   const groups = { IDL: [], DL: [], OTHER: [] };
   sorted.forEach(e => {
@@ -2008,7 +2024,7 @@ function movePriority(empId, dir) {
 async function savePriorityOrder() {
   if (!sb) return;
   const pin = document.getElementById('adminPin').value.trim();
-  const sorted = sortPriorityList(employees.filter(e => e.active));
+  const sorted = sortPriorityList(employees.filter(e => e.active && e.show_in_coverage !== false));
   const groups = { IDL: [], DL: [], OTHER: [] };
   sorted.forEach(e => {
     const lt = (e.labor_type || '').toUpperCase();
