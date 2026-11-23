@@ -55,7 +55,7 @@ create table if not exists settings (
 
 insert into settings(key, value) values
   ('shift_day_period', '08:00 – 20:00'),
-  ('shift_night_enabled', 'false'),
+  ('shift_night_enabled', 'true'),
   ('shift_night_period', '20:00 – 08:00'),
   ('shift_target_headcount', '0'),
   ('shift_gap_details', 'N/A'),
@@ -665,7 +665,7 @@ begin
     'ok', true,
     'settings', jsonb_build_object(
       'shift_day_period', coalesce((select value from settings where key = 'shift_day_period'), '08:00 – 20:00'),
-      'shift_night_enabled', coalesce((select value from settings where key = 'shift_night_enabled'), 'false'),
+      'shift_night_enabled', coalesce((select value from settings where key = 'shift_night_enabled'), 'true'),
       'shift_night_period', coalesce((select value from settings where key = 'shift_night_period'), '20:00 – 08:00'),
       'shift_target_headcount', coalesce((select value from settings where key = 'shift_target_headcount'), '0'),
       'shift_gap_details', coalesce((select value from settings where key = 'shift_gap_details'), 'N/A'),
@@ -811,7 +811,7 @@ begin
     'personnel', v_personnel,
     'settings', jsonb_build_object(
       'shift_day_period', coalesce((select value from settings where key = 'shift_day_period'), '08:00 – 20:00'),
-      'shift_night_enabled', coalesce((select value from settings where key = 'shift_night_enabled'), 'false'),
+      'shift_night_enabled', coalesce((select value from settings where key = 'shift_night_enabled'), 'true'),
       'shift_night_period', coalesce((select value from settings where key = 'shift_night_period'), '20:00 – 08:00'),
       'shift_target_headcount', coalesce((select value from settings where key = 'shift_target_headcount'), '0'),
       'shift_gap_details', coalesce((select value from settings where key = 'shift_gap_details'), 'N/A'),
