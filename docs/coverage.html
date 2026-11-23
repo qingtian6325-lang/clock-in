@@ -499,6 +499,8 @@
       <div class="kv-val" id="valEscContact">—</div>
       <div class="kv-key">Backup Escalation</div>
       <div class="kv-val" id="valEscBackup">N/A</div>
+      <div class="kv-key">Backup Contact</div>
+      <div class="kv-val" id="valEscBackupContact">—</div>
     </div>
   </div>
 </div>
@@ -635,6 +637,21 @@ function computeViewModel(data) {
   let gapDetails = (s.shift_gap_details || '').trim() || 'N/A';
   if (target > 0 && count >= target) gapDetails = 'N/A';
 
+  const rawBackup = (s.escalation_backup || 'N/A').trim();
+  let escBackupName = 'N/A';
+  let escBackupContact = '';
+  if (rawBackup && rawBackup.toUpperCase() !== 'N/A') {
+    const parts = rawBackup.split(/\s*\/\s*/).map(x => x.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      escBackupContact = parts.pop();
+      escBackupName = parts.join(' / ');
+    } else {
+      escBackupName = rawBackup;
+      const em = rawBackup.match(/([^\s@<>]+@[^\s@<>]+\.[^\s@<>]+)/);
+      if (em) escBackupContact = em[1];
+    }
+  }
+
   return {
     updatedAt: fmtTimeMYT(nowTs),
     dateStr,
@@ -649,7 +666,8 @@ function computeViewModel(data) {
     escName: 'Eric Chien',
     escRole: 'Manager',
     escContact: 'Eric_Chien@wiwynn.com',
-    escBackup: (s.escalation_backup || 'N/A').trim()
+    escBackupName,
+    escBackupContact
   };
 }
 
@@ -690,7 +708,10 @@ function renderBoard(vm) {
   document.getElementById('valEscName').textContent = vm.escName || '—';
   document.getElementById('valEscRole').textContent = vm.escRole || '—';
   document.getElementById('valEscContact').innerHTML = formatContactHtml(vm.escContact);
-  document.getElementById('valEscBackup').innerHTML = formatContactHtml(vm.escBackup);
+  document.getElementById('valEscBackup').textContent = vm.escBackupName || 'N/A';
+  document.getElementById('valEscBackupContact').innerHTML = vm.escBackupContact
+    ? formatContactHtml(vm.escBackupContact)
+    : '<span style="color:#94a3b8">—</span>';
 }
 
 async function copyForTeams() {
@@ -718,7 +739,8 @@ async function copyForTeams() {
     `Escalation Manager: ${vm.escName}`,
     `Designation: ${vm.escRole}`,
     `Contact: ${vm.escContact}`,
-    `Backup Escalation Contact: ${vm.escBackup}`
+    `Backup Escalation: ${vm.escBackupName}`,
+    `Backup Contact: ${vm.escBackupContact || 'N/A'}`
   ].join('\n');
 
   const formatCopyCell = val => {
@@ -770,7 +792,8 @@ async function copyForTeams() {
         <tr><td style="border:1px solid #cbd5e1;padding:6px 10px;background:#f8fafc;"><strong>Escalation Manager</strong></td><td style="border:1px solid #cbd5e1;padding:6px 10px;">${escapeHtml(vm.escName)}</td></tr>
         <tr><td style="border:1px solid #cbd5e1;padding:6px 10px;background:#f8fafc;"><strong>Designation</strong></td><td style="border:1px solid #cbd5e1;padding:6px 10px;">${escapeHtml(vm.escRole)}</td></tr>
         <tr><td style="border:1px solid #cbd5e1;padding:6px 10px;background:#f8fafc;"><strong>Contact</strong></td><td style="border:1px solid #cbd5e1;padding:6px 10px;">${formatCopyCell(vm.escContact)}</td></tr>
-        <tr><td style="border:1px solid #cbd5e1;padding:6px 10px;background:#f8fafc;"><strong>Backup Escalation Contact</strong></td><td style="border:1px solid #cbd5e1;padding:6px 10px;">${formatCopyCell(vm.escBackup)}</td></tr>
+        <tr><td style="border:1px solid #cbd5e1;padding:6px 10px;background:#f8fafc;"><strong>Backup Escalation</strong></td><td style="border:1px solid #cbd5e1;padding:6px 10px;">${escapeHtml(vm.escBackupName)}</td></tr>
+        <tr><td style="border:1px solid #cbd5e1;padding:6px 10px;background:#f8fafc;"><strong>Backup Contact</strong></td><td style="border:1px solid #cbd5e1;padding:6px 10px;">${formatCopyCell(vm.escBackupContact || 'N/A')}</td></tr>
       </table>
     </div>
   `.trim();
