@@ -16,9 +16,10 @@ create table if not exists employees (
 create unique index if not exists uq_employees_staff_id on employees(staff_id);
 create unique index if not exists uq_employees_name on employees(name);
 
--- email contact & Shift Lead priority order (lower number = higher priority; IDL always ranks above DL)
+-- email contact, Shift Lead priority order, and Shift Coverage visibility
 alter table employees add column if not exists email text;
 alter table employees add column if not exists lead_priority int not null default 999;
+alter table employees add column if not exists show_in_coverage boolean not null default true;
 
 update employees set lead_priority = 1
 where replace(lower(name), ' ', '') like '%yiyang%' and lead_priority = 999;
@@ -30,6 +31,13 @@ update employees set lead_priority = 2
 where replace(lower(name), ' ', '') like '%faiz%' and upper(coalesce(labor_type, '')) <> 'IDL' and lead_priority = 999;
 update employees set lead_priority = 3
 where replace(lower(name), ' ', '') like '%adam%' and upper(coalesce(labor_type, '')) <> 'IDL' and lead_priority = 999;
+
+update employees set show_in_coverage = false
+where (
+  replace(lower(name), ' ', '') like '%hanies%'
+  or replace(lower(name), ' ', '') like '%aireen%'
+  or replace(lower(name), ' ', '') like '%aifreen%'
+) and show_in_coverage = true;
 
 -- attendance records table
 create table if not exists records (
@@ -252,9 +260,11 @@ $$;
 drop function if exists admin_add_employee(text, text, text, text);
 drop function if exists admin_add_employee(text, text, text, text, text);
 drop function if exists admin_add_employee(text, text, text, text, text, text, int);
+drop function if exists admin_add_employee(text, text, text, text, text, text, int, boolean);
 create or replace function admin_add_employee(
   p_admin_pin text, p_staff_id text, p_name text, p_emp_pin text,
-  p_labor_type text, p_email text default null, p_lead_priority int default 999
+  p_labor_type text, p_email text default null, p_lead_priority int default 999,
+  p_show_in_coverage boolean default true
 )
 returns jsonb
 language plpgsql
@@ -284,11 +294,12 @@ begin
   end if;
 
   begin
-    insert into employees(staff_id, name, pin, labor_type, email, lead_priority)
+    insert into employees(staff_id, name, pin, labor_type, email, lead_priority, show_in_coverage)
     values (
       btrim(p_staff_id), btrim(p_name), nullif(btrim(p_emp_pin), ''),
       v_labor, nullif(btrim(coalesce(p_email, '')), ''),
-      coalesce(p_lead_priority, 999)
+      coalesce(p_lead_priority, 999),
+      coalesce(p_show_in_coverage, true)
     );
   exception when unique_violation then
     return jsonb_build_object('ok', false, 'msg', 'This staff ID or name already exists');
@@ -429,7 +440,8 @@ begin
       jsonb_build_object(
         'id', id, 'staff_id', staff_id, 'name', name,
         'labor_type', labor_type, 'active', active,
-        'email', coalesce(email, ''), 'lead_priority', lead_priority
+        'email', coalesce(email, ''), 'lead_priority', lead_priority,
+        'show_in_coverage', coalesce(show_in_coverage, true)
       ) order by
         case
           when upper(coalesce(labor_type, '')) = 'IDL' then 0
@@ -447,10 +459,12 @@ $$;
 -- admin: edit employee details (admin PIN verified server-side)
 drop function if exists admin_edit_employee(text, bigint, text, text, text, boolean);
 drop function if exists admin_edit_employee(text, bigint, text, text, text, boolean, text, int);
+drop function if exists admin_edit_employee(text, bigint, text, text, text, boolean, text, int, boolean);
 create or replace function admin_edit_employee(
   p_admin_pin text, p_emp_id bigint, p_staff_id text, p_name text,
   p_labor_type text, p_active boolean,
-  p_email text default null, p_lead_priority int default null
+  p_email text default null, p_lead_priority int default null,
+  p_show_in_coverage boolean default null
 )
 returns jsonb
 language plpgsql
@@ -485,12 +499,13 @@ begin
 
   begin
     update employees
-    set staff_id      = btrim(p_staff_id),
-        name          = btrim(p_name),
-        labor_type    = v_labor,
-        active        = coalesce(p_active, true),
-        email         = nullif(btrim(coalesce(p_email, '')), ''),
-        lead_priority = coalesce(p_lead_priority, lead_priority)
+    set staff_id         = btrim(p_staff_id),
+        name             = btrim(p_name),
+        labor_type       = v_labor,
+        active           = coalesce(p_active, true),
+        email            = nullif(btrim(coalesce(p_email, '')), ''),
+        lead_priority    = coalesce(p_lead_priority, lead_priority),
+        show_in_coverage = coalesce(p_show_in_coverage, show_in_coverage)
     where id = p_emp_id;
   exception when unique_violation then
     return jsonb_build_object('ok', false, 'msg', 'This staff ID or name already exists');
@@ -790,6 +805,7 @@ begin
       limit 1
     ) r on true
     where e.active
+      and coalesce(e.show_in_coverage, true)
       and r.action = 'in'
       and (now() - r.ts) <= interval '14 hours'
   )
@@ -829,10 +845,10 @@ grant execute on function clock(bigint, text, double precision, double precision
 grant execute on function my_records(bigint) to anon, authenticated;
 grant execute on function lookup_employee(text) to anon, authenticated;
 grant execute on function admin_records(text, int) to anon, authenticated;
-grant execute on function admin_add_employee(text, text, text, text, text, text, int) to anon, authenticated;
+grant execute on function admin_add_employee(text, text, text, text, text, text, int, boolean) to anon, authenticated;
 grant execute on function admin_add_record(text, bigint, text, text) to anon, authenticated;
 grant execute on function admin_list_employees(text) to anon, authenticated;
-grant execute on function admin_edit_employee(text, bigint, text, text, text, boolean, text, int) to anon, authenticated;
+grant execute on function admin_edit_employee(text, bigint, text, text, text, boolean, text, int, boolean) to anon, authenticated;
 grant execute on function admin_get_location(text) to anon, authenticated;
 grant execute on function admin_set_location(text, double precision, double precision, text) to anon, authenticated;
 grant execute on function admin_out_of_range(text, int) to anon, authenticated;
