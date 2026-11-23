@@ -641,27 +641,22 @@
       <label>Coverage Gap Details (shown if Shortfall, or N/A)</label>
       <input id="covGapDetails" placeholder="N/A">
 
-      <label>Pick Escalation Manager from Employees (optional)</label>
-      <div class="picker">
-        <div class="picker-row">
-          <input id="escSearch" placeholder="Type name or staff ID to quick-fill…" autocomplete="off">
-          <button type="button" class="dropbtn" id="escDrop" aria-label="Select escalation manager">▼</button>
-          <button type="button" class="dropbtn" id="escClear" aria-label="Clear search">✕</button>
-        </div>
-        <div id="escSuggest" class="suggest hidden"></div>
+      <label>Escalation Manager (Fixed)</label>
+      <div class="hint" style="margin-top:0;padding:12px 14px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;color:#0f172a;">
+        <b>Eric Chien</b> — Manager<br>
+        <span style="color:#2563eb;font-weight:600;">Eric_Chien@wiwynn.com</span>
       </div>
 
-      <label>Escalation Manager Name</label>
-      <input id="covEscName" placeholder="Eric Chien">
-
-      <label>Designation</label>
-      <input id="covEscDesignation" placeholder="Manager">
-
-      <label>Escalation Manager Email</label>
-      <input id="covEscContact" type="email" placeholder="Eric_Chien@wiwynn.com">
-
-      <label>Backup Escalation Contact</label>
-      <input id="covEscBackup" placeholder="N/A">
+      <label>Backup Escalation Contact (pick an employee or type N/A)</label>
+      <div class="picker">
+        <div class="picker-row">
+          <input id="backupSearch" placeholder="Type name or staff ID to select backup…" autocomplete="off">
+          <button type="button" class="dropbtn" id="backupDrop" aria-label="Select backup escalation">▼</button>
+          <button type="button" class="dropbtn" id="backupClear" aria-label="Reset backup to N/A">✕</button>
+        </div>
+        <div id="backupSuggest" class="suggest hidden"></div>
+      </div>
+      <input id="covEscBackup" placeholder="N/A" style="margin-top:8px;">
 
       <button class="btn-blue" onclick="saveCoverageSettings()">💾 Save Shift &amp; Coverage Settings</button>
       <div class="msg" id="covSetMsg"></div>
@@ -1894,48 +1889,50 @@ async function exportOutOfRange() {
 }
 
 // ---- Shift & Coverage Settings + Team Lead Priority Order ----
-const escSearch = document.getElementById('escSearch');
-const escSuggest = document.getElementById('escSuggest');
+const backupSearch = document.getElementById('backupSearch');
+const backupSuggest = document.getElementById('backupSuggest');
 
-function renderEscSuggest(hits) {
+function renderBackupSuggest(hits) {
   if (!hits.length) {
-    escSuggest.innerHTML = '<div class="sug-empty">No match</div>';
+    backupSuggest.innerHTML = '<div class="sug-empty">No match</div>';
   } else {
-    escSuggest.innerHTML = hits.map(e => {
+    backupSuggest.innerHTML = hits.map(e => {
       const sub = e.email ? ` (${e.email})` : '';
       return `<button type="button" data-id="${e.id}">${escapeHtml(empLabel(e) + sub)}</button>`;
     }).join('');
-    escSuggest.querySelectorAll('button').forEach(b =>
+    backupSuggest.querySelectorAll('button').forEach(b =>
       b.addEventListener('click', () => {
         const emp = employees.find(x => x.id === +b.dataset.id);
         if (!emp) return;
-        escSearch.value = empLabel(emp);
-        document.getElementById('covEscName').value = emp.name || '';
-        if (emp.email) document.getElementById('covEscContact').value = emp.email;
-        escSuggest.classList.add('hidden');
+        backupSearch.value = empLabel(emp);
+        document.getElementById('covEscBackup').value = emp.email
+          ? `${emp.name} / ${emp.email}`
+          : emp.name;
+        backupSuggest.classList.add('hidden');
       })
     );
   }
-  escSuggest.classList.remove('hidden');
+  backupSuggest.classList.remove('hidden');
 }
-escSearch.addEventListener('input', () => {
-  const q = escSearch.value.trim();
-  if (!q) { escSuggest.classList.add('hidden'); return; }
-  renderEscSuggest(filterEmps(q).slice(0, 8));
+backupSearch.addEventListener('input', () => {
+  const q = backupSearch.value.trim();
+  if (!q) { backupSuggest.classList.add('hidden'); return; }
+  renderBackupSuggest(filterEmps(q).slice(0, 8));
 });
-document.getElementById('escDrop').addEventListener('click', () => {
-  if (!escSuggest.classList.contains('hidden')) { escSuggest.classList.add('hidden'); return; }
-  renderEscSuggest(filterEmps(escSearch.value).slice(0, 50));
+document.getElementById('backupDrop').addEventListener('click', () => {
+  if (!backupSuggest.classList.contains('hidden')) { backupSuggest.classList.add('hidden'); return; }
+  renderBackupSuggest(filterEmps('').slice(0, 50));
 });
-document.getElementById('escClear').addEventListener('click', () => {
-  escSearch.value = '';
-  escSuggest.classList.add('hidden');
+document.getElementById('backupClear').addEventListener('click', () => {
+  backupSearch.value = '';
+  document.getElementById('covEscBackup').value = 'N/A';
+  backupSuggest.classList.add('hidden');
 });
-escSearch.addEventListener('keydown', e => {
-  if (e.key === 'Escape') escSuggest.classList.add('hidden');
+backupSearch.addEventListener('keydown', e => {
+  if (e.key === 'Escape') backupSuggest.classList.add('hidden');
 });
 document.addEventListener('click', e => {
-  if (!e.target.closest('.picker')) escSuggest.classList.add('hidden');
+  if (!e.target.closest('.picker')) backupSuggest.classList.add('hidden');
 });
 
 function sortPriorityList(list) {
@@ -2048,15 +2045,12 @@ async function loadCoverageSettingsPanel() {
     }
     const s = data.settings || {};
     document.getElementById('covDayPeriod').value = s.shift_day_period || '08:00 – 20:00';
-    const nightOn = s.shift_night_enabled === 'true';
+    const nightOn = s.shift_night_enabled !== 'false';
     document.getElementById('covNightEnabled').value = nightOn ? 'true' : 'false';
     document.getElementById('covNightPeriodWrap').classList.toggle('hidden', !nightOn);
     document.getElementById('covNightPeriod').value = s.shift_night_period || '20:00 – 08:00';
     document.getElementById('covTargetHeadcount').value = s.shift_target_headcount || '0';
     document.getElementById('covGapDetails').value = s.shift_gap_details || 'N/A';
-    document.getElementById('covEscName').value = s.escalation_name || 'Eric Chien';
-    document.getElementById('covEscDesignation').value = s.escalation_designation || 'Manager';
-    document.getElementById('covEscContact').value = s.escalation_contact || 'Eric_Chien@wiwynn.com';
     document.getElementById('covEscBackup').value = s.escalation_backup || 'N/A';
   } catch (e) {
     say('covSetMsg', '❌ Network error loading settings', false);
@@ -2072,9 +2066,9 @@ async function saveCoverageSettings() {
     shift_night_period: document.getElementById('covNightPeriod').value.trim() || '20:00 – 08:00',
     shift_target_headcount: String(Math.max(0, parseInt(document.getElementById('covTargetHeadcount').value, 10) || 0)),
     shift_gap_details: document.getElementById('covGapDetails').value.trim() || 'N/A',
-    escalation_name: document.getElementById('covEscName').value.trim() || 'Eric Chien',
-    escalation_designation: document.getElementById('covEscDesignation').value.trim() || 'Manager',
-    escalation_contact: document.getElementById('covEscContact').value.trim() || 'Eric_Chien@wiwynn.com',
+    escalation_name: 'Eric Chien',
+    escalation_designation: 'Manager',
+    escalation_contact: 'Eric_Chien@wiwynn.com',
     escalation_backup: document.getElementById('covEscBackup').value.trim() || 'N/A'
   };
   say('covSetMsg', '⏳ Saving…', true);
