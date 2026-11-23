@@ -412,16 +412,7 @@
 
 <div id="cfgWarn" class="warn hidden">⚠️ Database connection not configured. Please complete the setup in README.</div>
 
-<div id="covGate" class="card hidden">
-  <label>Viewer PIN (or Admin PIN)</label>
-  <div class="row2">
-    <input id="covPin" type="password" placeholder="Enter PIN to view Shift Coverage" onkeydown="if(event.key==='Enter')unlockCoverage()">
-    <button onclick="unlockCoverage()">View</button>
-  </div>
-  <div class="msg" id="gateMsg"></div>
-</div>
-
-<div id="covBoard" class="hidden">
+<div id="covBoard">
   <div class="toolbar">
     <div class="live-pill">
       <span class="live-dot"></span>
@@ -430,7 +421,6 @@
     <div class="toolbar-actions">
       <button type="button" class="btn-tool" onclick="loadCoverage(true)">🔄 Refresh</button>
       <button type="button" class="btn-tool primary" onclick="copyForTeams()">📋 Copy for Teams</button>
-      <button type="button" class="btn-tool hidden" id="btnLockPin" onclick="lockCoverage()">🔒 Lock</button>
     </div>
   </div>
   <div class="msg hidden" id="copyMsg" style="margin-bottom:12px;"></div>
@@ -499,10 +489,8 @@
 <script>
 const CFG = window.APP_CONFIG || {};
 const TZ = 'Asia/Kuala_Lumpur';
-const PIN_STORAGE_KEY = 'clockin_coverage_pin';
 
 let sb = null;
-let currentPin = localStorage.getItem(PIN_STORAGE_KEY) || '';
 let latestPayload = null;
 let refreshTimer = null;
 
@@ -547,12 +535,6 @@ function getHourMYT(ts) {
   return parseInt(h, 10) || 0;
 }
 
-function sayGate(text, ok) {
-  const m = document.getElementById('gateMsg');
-  m.textContent = text;
-  m.className = 'msg ' + (ok === true ? 'ok' : ok === false ? 'err' : '');
-}
-
 function showCopyMsg(text, ok) {
   const m = document.getElementById('copyMsg');
   m.textContent = text;
@@ -562,55 +544,15 @@ function showCopyMsg(text, ok) {
   showCopyMsg._t = setTimeout(() => m.classList.add('hidden'), 3500);
 }
 
-async function unlockCoverage() {
-  const input = document.getElementById('covPin').value.trim();
-  if (!input) { sayGate('❌ Please enter PIN', false); return; }
-  currentPin = input;
-  await loadCoverage(true);
-}
-
-function lockCoverage() {
-  localStorage.removeItem(PIN_STORAGE_KEY);
-  currentPin = '';
-  document.getElementById('covPin').value = '';
-  document.getElementById('covBoard').classList.add('hidden');
-  document.getElementById('covGate').classList.remove('hidden');
-  sayGate('', null);
-  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
-}
-
 async function loadCoverage(fromUserAction) {
   if (!sb) return;
   try {
-    const { data, error } = await sb.rpc('shift_coverage', { p_pin: currentPin || '' });
+    const { data, error } = await sb.rpc('shift_coverage');
     if (error) throw error;
     if (!data || !data.ok) {
-      if (data && data.auth_required) {
-        if (currentPin) localStorage.removeItem(PIN_STORAGE_KEY);
-        document.getElementById('covBoard').classList.add('hidden');
-        document.getElementById('covGate').classList.remove('hidden');
-        if (fromUserAction || currentPin) {
-          sayGate('❌ ' + (data.msg || 'Incorrect PIN'), false);
-        } else {
-          sayGate('', null);
-        }
-        currentPin = '';
-        return;
-      }
-      sayGate('❌ ' + (data && data.msg || 'Failed to load'), false);
+      showCopyMsg('❌ ' + (data && data.msg || 'Failed to load coverage'), false);
       return;
     }
-
-    if (currentPin) {
-      localStorage.setItem(PIN_STORAGE_KEY, currentPin);
-      document.getElementById('btnLockPin').classList.remove('hidden');
-    } else {
-      document.getElementById('btnLockPin').classList.add('hidden');
-    }
-
-    document.getElementById('covGate').classList.add('hidden');
-    document.getElementById('covBoard').classList.remove('hidden');
-    sayGate('', null);
 
     latestPayload = computeViewModel(data);
     renderBoard(latestPayload);
@@ -619,7 +561,7 @@ async function loadCoverage(fromUserAction) {
       refreshTimer = setInterval(() => loadCoverage(false), 60000);
     }
   } catch (e) {
-    if (fromUserAction) sayGate('❌ Network error, please try again', false);
+    if (fromUserAction) showCopyMsg('❌ Network error, please try again', false);
   }
 }
 
