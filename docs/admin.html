@@ -432,6 +432,7 @@
       <button id="btn-backfill" onclick="showPanel('backfill')">🕐 Backfill Record</button>
       <button id="btn-records" onclick="showPanel('records')">📋 Check All Records</button>
       <button id="btn-missed" onclick="showPanel('missed')">⚠️ Missed Punches <span id="missedMenuBadge" class="menu-badge hidden">0</span></button>
+      <button id="btn-coverage" onclick="showPanel('coverage')">📊 Shift &amp; Coverage Settings</button>
       <button id="btn-location" onclick="showPanel('location')">📍 Out-of-Range Check-ins</button>
     </div>
     <div class="msg" id="adminMsg2"></div>
@@ -441,6 +442,10 @@
       <input id="newStaffId" placeholder="Staff ID, e.g. YM1234567" autocapitalize="characters">
       <label>Name</label>
       <input id="newName" placeholder="Name">
+      <label>Email (for Shift Coverage contact)</label>
+      <input id="newEmail" type="email" placeholder="name@wiwynn.com" autocomplete="off">
+      <label>Shift Lead Priority Order (optional, smaller = higher)</label>
+      <input id="newPriority" type="number" min="1" placeholder="Default 999 (IDL always ranks above DL)">
       <label>Labor Type</label>
       <div class="row2">
         <select id="newLaborType">
@@ -468,6 +473,10 @@
         <input id="editStaffId" autocapitalize="characters">
         <label>Name</label>
         <input id="editName">
+        <label>Email (for Shift Coverage contact)</label>
+        <input id="editEmail" type="email" placeholder="name@wiwynn.com" autocomplete="off">
+        <label>Shift Lead Priority Order (smaller = higher)</label>
+        <input id="editPriority" type="number" min="1">
         <label>Labor Type</label>
         <select id="editLaborType">
           <option value="">Select type</option>
@@ -597,6 +606,79 @@
       </div>
       <div class="hint">💡 Records without a location (e.g. GPS permission denied) are treated as out of range. Backfilled records are not listed here. Use ✏️ Edit to set a record's location.</div>
     </div>
+
+    <div id="panel-coverage" class="panel hidden">
+      <div class="missed-banner all-clear" style="margin-top:8px;align-items:center;">
+        <div>
+          <b>📊 Live Shift Coverage Board</b><br>
+          <span style="font-size:12.5px;">Automatically shows currently clocked-in staff (<code>IDL &gt; DL</code> + priority order). #1 is <b>Shift Lead</b>, others are <b>member</b>.</span>
+        </div>
+        <a href="coverage.html" target="_blank" rel="noopener" class="mini-btn" style="text-decoration:none;background:#059669;color:#fff;">Open ↗</a>
+      </div>
+
+      <label>Day Shift Coverage Period</label>
+      <input id="covDayPeriod" placeholder="08:00 – 20:00">
+
+      <label>Night Shift Mode</label>
+      <select id="covNightEnabled" onchange="document.getElementById('covNightPeriodWrap').classList.toggle('hidden', this.value !== 'true')">
+        <option value="false">Day Shift Only (08:00 – 20:00)</option>
+        <option value="true">Auto-switch Day &amp; Night Shift</option>
+      </select>
+      <div id="covNightPeriodWrap" class="hidden">
+        <label>Night Shift Coverage Period</label>
+        <input id="covNightPeriod" placeholder="20:00 – 08:00">
+      </div>
+
+      <label>Target Headcount (0 = show active count only)</label>
+      <input id="covTargetHeadcount" type="number" min="0" placeholder="0">
+
+      <label>Coverage Gap Details (shown if Shortfall, or N/A)</label>
+      <input id="covGapDetails" placeholder="N/A">
+
+      <label>Pick Escalation Manager from Employees (optional)</label>
+      <div class="picker">
+        <div class="picker-row">
+          <input id="escSearch" placeholder="Type name or staff ID to quick-fill…" autocomplete="off">
+          <button type="button" class="dropbtn" id="escDrop" aria-label="Select escalation manager">▼</button>
+          <button type="button" class="dropbtn" id="escClear" aria-label="Clear search">✕</button>
+        </div>
+        <div id="escSuggest" class="suggest hidden"></div>
+      </div>
+
+      <label>Escalation Manager Name</label>
+      <input id="covEscName" placeholder="Eric Chien">
+
+      <label>Designation</label>
+      <input id="covEscDesignation" placeholder="Manager">
+
+      <label>Escalation Manager Email</label>
+      <input id="covEscContact" type="email" placeholder="Eric_Chien@wiwynn.com">
+
+      <label>Backup Escalation Contact</label>
+      <input id="covEscBackup" placeholder="N/A">
+
+      <label>Viewer Page Access (coverage.html)</label>
+      <select id="covPublic" onchange="document.getElementById('covPinWrap').classList.toggle('hidden', this.value === 'true')">
+        <option value="false">Protected by Viewer PIN (or Admin PIN)</option>
+        <option value="true">Open / Public (No PIN required)</option>
+      </select>
+      <div id="covPinWrap">
+        <label>Viewer PIN (read-only; leave blank to only allow Admin PIN)</label>
+        <input id="covViewerPin" placeholder="e.g. 2026">
+      </div>
+
+      <button class="btn-blue" onclick="saveCoverageSettings()">💾 Save Shift &amp; Coverage Settings</button>
+      <div class="msg" id="covSetMsg"></div>
+
+      <label style="margin-top:22px">Team Lead Priority Order (IDL &gt; DL, then order below)</label>
+      <div class="hint" style="margin-top:0;margin-bottom:8px;">Use ▲ / ▼ to reorder within IDL or DL. Whoever is #1 among currently clocked-in staff becomes <b>Shift Lead</b>; everyone else becomes <b>member</b>.</div>
+      <table id="priorityTable">
+        <thead><tr><th>Rank</th><th>DL/IDL</th><th>Name</th><th>Email</th><th>Order</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <button class="btn-blue" onclick="savePriorityOrder()">💾 Save Priority Order</button>
+      <div class="msg" id="prioMsg"></div>
+    </div>
   </div>
   <div class="hint">💡 The monthly report is generated automatically on the 1st of each month and emailed. You can also trigger it manually in GitHub Actions.</div>
 </div>
@@ -628,7 +710,10 @@
   </div>
 </div>
 
-<a class="back" href="index.html">← Back to clock-in page</a>
+<div style="display:flex;justify-content:center;gap:14px;flex-wrap:wrap;margin-top:18px">
+  <a class="back" style="margin:0" href="index.html">← Back to clock-in page</a>
+  <a class="back" style="margin:0" href="coverage.html">📊 Live Shift Coverage</a>
+</div>
 
 <script src="supabase.min.js?v=20261005a"></script>
 <script src="xlsx.full.min.js?v=20261005"></script>
@@ -683,15 +768,16 @@ function typeLabel(action) {
   return action === 'in' ? 'Clock In' : 'Clock Out';
 }
 
-// Switch between the 5 panels
+// Switch between panels
 function showPanel(name) {
   currentPanel = name;
-  ['addEmp', 'editEmp', 'backfill', 'records', 'missed', 'location'].forEach(p => {
+  ['addEmp', 'editEmp', 'backfill', 'records', 'missed', 'coverage', 'location'].forEach(p => {
     document.getElementById('panel-' + p).classList.toggle('hidden', p !== name);
     document.getElementById('btn-' + p).classList.toggle('active', p === name);
   });
   if (name === 'location') loadLocationPanel();
   if (name === 'missed') loadMissedPanel();
+  if (name === 'coverage') loadCoverageSettingsPanel();
 }
 
 // Employee list for pickers: via admin RPC (includes inactive + labor type)
@@ -789,6 +875,8 @@ function renderEditSuggest(hits) {
         // pre-fill form
         document.getElementById('editStaffId').value = emp.staff_id || '';
         document.getElementById('editName').value = emp.name || '';
+        document.getElementById('editEmail').value = emp.email || '';
+        document.getElementById('editPriority').value = emp.lead_priority != null ? emp.lead_priority : 999;
         document.getElementById('editLaborType').value = emp.labor_type || '';
         document.getElementById('editActive').value = emp.active ? 'true' : 'false';
         document.getElementById('editForm').classList.remove('hidden');
@@ -829,12 +917,17 @@ async function saveEmployee() {
   if (!editEmpId) { say('adminMsg2', '❌ Please search and select an employee', false); return; }
   const staffId = document.getElementById('editStaffId').value.trim();
   const name = document.getElementById('editName').value.trim();
+  const email = document.getElementById('editEmail').value.trim();
+  const prioRaw = parseInt(document.getElementById('editPriority').value, 10);
+  const leadPriority = isFinite(prioRaw) && prioRaw > 0 ? prioRaw : 999;
   if (!staffId) { say('adminMsg2', '❌ Please enter staff ID', false); return; }
   if (!name) { say('adminMsg2', '❌ Please enter name', false); return; }
   const { data, error } = await sb.rpc('admin_edit_employee', {
     p_admin_pin: pin, p_emp_id: editEmpId, p_staff_id: staffId, p_name: name,
     p_labor_type: document.getElementById('editLaborType').value,
-    p_active: document.getElementById('editActive').value === 'true'
+    p_active: document.getElementById('editActive').value === 'true',
+    p_email: email || null,
+    p_lead_priority: leadPriority
   });
   if (error || !data.ok) { say('adminMsg2', '❌ ' + (data && data.msg || 'Network error'), false); return; }
   say('adminMsg2', '✅ ' + data.msg, true);
@@ -1191,15 +1284,20 @@ async function addEmployee() {
   const pin = document.getElementById('adminPin').value.trim();
   const staffId = document.getElementById('newStaffId').value.trim();
   const name = document.getElementById('newName').value.trim();
+  const email = document.getElementById('newEmail').value.trim();
+  const prioRaw = parseInt(document.getElementById('newPriority').value, 10);
+  const leadPriority = isFinite(prioRaw) && prioRaw > 0 ? prioRaw : 999;
   const laborType = document.getElementById('newLaborType').value;
   if (!staffId) { say('adminMsg2', '❌ Please enter staff ID', false); return; }
   const { data, error } = await sb.rpc('admin_add_employee',
     { p_admin_pin: pin, p_staff_id: staffId, p_name: name, p_emp_pin: '',
-      p_labor_type: laborType });
+      p_labor_type: laborType, p_email: email || null, p_lead_priority: leadPriority });
   if (error || !data.ok) { say('adminMsg2', '❌ ' + (data && data.msg || 'Network error'), false); return; }
   say('adminMsg2', '✅ ' + data.msg, true);
   document.getElementById('newStaffId').value = '';
   document.getElementById('newName').value = '';
+  document.getElementById('newEmail').value = '';
+  document.getElementById('newPriority').value = '';
   document.getElementById('newLaborType').value = '';
   fetchEmployees();
 }
@@ -1795,6 +1893,204 @@ async function exportOutOfRange() {
   XLSX.utils.book_append_sheet(wb, ws, 'OutOfRange');
   XLSX.writeFile(wb, 'out-of-range-' + new Date().toISOString().slice(0, 10) + '.xlsx');
   say('locMsg', '✅ Exported ' + oorRecords.length + ' records', true);
+}
+
+// ---- Shift & Coverage Settings + Team Lead Priority Order ----
+const escSearch = document.getElementById('escSearch');
+const escSuggest = document.getElementById('escSuggest');
+
+function renderEscSuggest(hits) {
+  if (!hits.length) {
+    escSuggest.innerHTML = '<div class="sug-empty">No match</div>';
+  } else {
+    escSuggest.innerHTML = hits.map(e => {
+      const sub = e.email ? ` (${e.email})` : '';
+      return `<button type="button" data-id="${e.id}">${escapeHtml(empLabel(e) + sub)}</button>`;
+    }).join('');
+    escSuggest.querySelectorAll('button').forEach(b =>
+      b.addEventListener('click', () => {
+        const emp = employees.find(x => x.id === +b.dataset.id);
+        if (!emp) return;
+        escSearch.value = empLabel(emp);
+        document.getElementById('covEscName').value = emp.name || '';
+        if (emp.email) document.getElementById('covEscContact').value = emp.email;
+        escSuggest.classList.add('hidden');
+      })
+    );
+  }
+  escSuggest.classList.remove('hidden');
+}
+escSearch.addEventListener('input', () => {
+  const q = escSearch.value.trim();
+  if (!q) { escSuggest.classList.add('hidden'); return; }
+  renderEscSuggest(filterEmps(q).slice(0, 8));
+});
+document.getElementById('escDrop').addEventListener('click', () => {
+  if (!escSuggest.classList.contains('hidden')) { escSuggest.classList.add('hidden'); return; }
+  renderEscSuggest(filterEmps(escSearch.value).slice(0, 50));
+});
+document.getElementById('escClear').addEventListener('click', () => {
+  escSearch.value = '';
+  escSuggest.classList.add('hidden');
+});
+escSearch.addEventListener('keydown', e => {
+  if (e.key === 'Escape') escSuggest.classList.add('hidden');
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.picker')) escSuggest.classList.add('hidden');
+});
+
+function sortPriorityList(list) {
+  const rankLabor = lt => (lt === 'IDL' ? 0 : lt === 'DL' ? 1 : 2);
+  return list.slice().sort((a, b) => {
+    const la = rankLabor((a.labor_type || '').toUpperCase());
+    const lb = rankLabor((b.labor_type || '').toUpperCase());
+    if (la !== lb) return la - lb;
+    const pa = a.lead_priority != null ? a.lead_priority : 999;
+    const pb = b.lead_priority != null ? b.lead_priority : 999;
+    if (pa !== pb) return pa - pb;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+}
+
+let priorityWorking = [];
+
+function renderPriorityTable() {
+  const tb = document.querySelector('#priorityTable tbody');
+  const active = sortPriorityList(employees.filter(e => e.active));
+  priorityWorking = active.map((e, i) => ({ ...e, _rank: i + 1 }));
+  if (!priorityWorking.length) {
+    tb.innerHTML = '<tr><td colspan="5">No active employees yet</td></tr>';
+    return;
+  }
+  tb.innerHTML = priorityWorking.map((e, idx) => {
+    const lt = (e.labor_type || '').toUpperCase();
+    const prevSame = idx > 0 && ((priorityWorking[idx - 1].labor_type || '').toUpperCase() === lt);
+    const nextSame = idx < priorityWorking.length - 1 && ((priorityWorking[idx + 1].labor_type || '').toUpperCase() === lt);
+    return `<tr>
+      <td><b>#${idx + 1}</b></td>
+      <td>${escapeHtml(e.labor_type || '-')}</td>
+      <td>${escapeHtml(e.name)}</td>
+      <td style="font-size:12.5px;color:#64748b;overflow-wrap:anywhere;">${escapeHtml(e.email || '—')}</td>
+      <td>
+        <div class="btn-action-group" style="flex-wrap:nowrap;">
+          <button type="button" class="mini-btn" onclick="movePriority(${e.id}, -1)" ${prevSame ? '' : 'disabled style="opacity:0.35;cursor:default;"'}>▲</button>
+          <button type="button" class="mini-btn" onclick="movePriority(${e.id}, 1)" ${nextSame ? '' : 'disabled style="opacity:0.35;cursor:default;"'}>▼</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function movePriority(empId, dir) {
+  const sorted = sortPriorityList(employees.filter(e => e.active));
+  // Normalize priorities per group so swapping is deterministic
+  const groups = { IDL: [], DL: [], OTHER: [] };
+  sorted.forEach(e => {
+    const lt = (e.labor_type || '').toUpperCase();
+    if (lt === 'IDL') groups.IDL.push(e);
+    else if (lt === 'DL') groups.DL.push(e);
+    else groups.OTHER.push(e);
+  });
+  Object.values(groups).forEach(arr => {
+    arr.forEach((e, i) => { e.lead_priority = i + 1; });
+    const idx = arr.findIndex(e => e.id === empId);
+    if (idx !== -1) {
+      const target = idx + dir;
+      if (target >= 0 && target < arr.length) {
+        const tmp = arr[idx].lead_priority;
+        arr[idx].lead_priority = arr[target].lead_priority;
+        arr[target].lead_priority = tmp;
+      }
+    }
+  });
+  renderPriorityTable();
+}
+
+async function savePriorityOrder() {
+  if (!sb) return;
+  const pin = document.getElementById('adminPin').value.trim();
+  const sorted = sortPriorityList(employees.filter(e => e.active));
+  const groups = { IDL: [], DL: [], OTHER: [] };
+  sorted.forEach(e => {
+    const lt = (e.labor_type || '').toUpperCase();
+    if (lt === 'IDL') groups.IDL.push(e);
+    else if (lt === 'DL') groups.DL.push(e);
+    else groups.OTHER.push(e);
+  });
+  const items = [];
+  Object.values(groups).forEach(arr => {
+    arr.forEach((e, i) => {
+      e.lead_priority = i + 1;
+      items.push({ id: e.id, lead_priority: i + 1 });
+    });
+  });
+  say('prioMsg', '⏳ Saving priority order…', true);
+  const { data, error } = await sb.rpc('admin_save_employee_priorities', {
+    p_admin_pin: pin, p_items: items
+  });
+  if (error || !data.ok) { say('prioMsg', '❌ ' + (data && data.msg || 'Save failed'), false); return; }
+  say('prioMsg', '✅ ' + data.msg, true);
+  await fetchEmployees();
+  renderPriorityTable();
+}
+
+async function loadCoverageSettingsPanel() {
+  if (!sb) return;
+  const pin = document.getElementById('adminPin').value.trim();
+  say('covSetMsg', '', null);
+  say('prioMsg', '', null);
+  await fetchEmployees();
+  renderPriorityTable();
+  try {
+    const { data, error } = await sb.rpc('admin_get_coverage_settings', { p_admin_pin: pin });
+    if (error || !data.ok) {
+      say('covSetMsg', '❌ ' + (data && data.msg || 'Could not load settings'), false);
+      return;
+    }
+    const s = data.settings || {};
+    document.getElementById('covDayPeriod').value = s.shift_day_period || '08:00 – 20:00';
+    const nightOn = s.shift_night_enabled === 'true';
+    document.getElementById('covNightEnabled').value = nightOn ? 'true' : 'false';
+    document.getElementById('covNightPeriodWrap').classList.toggle('hidden', !nightOn);
+    document.getElementById('covNightPeriod').value = s.shift_night_period || '20:00 – 08:00';
+    document.getElementById('covTargetHeadcount').value = s.shift_target_headcount || '0';
+    document.getElementById('covGapDetails').value = s.shift_gap_details || 'N/A';
+    document.getElementById('covEscName').value = s.escalation_name || 'Eric Chien';
+    document.getElementById('covEscDesignation').value = s.escalation_designation || 'Manager';
+    document.getElementById('covEscContact').value = s.escalation_contact || 'Eric_Chien@wiwynn.com';
+    document.getElementById('covEscBackup').value = s.escalation_backup || 'N/A';
+    const isPublic = s.coverage_public === 'true';
+    document.getElementById('covPublic').value = isPublic ? 'true' : 'false';
+    document.getElementById('covPinWrap').classList.toggle('hidden', isPublic);
+    document.getElementById('covViewerPin').value = s.coverage_pin || '';
+  } catch (e) {
+    say('covSetMsg', '❌ Network error loading settings', false);
+  }
+}
+
+async function saveCoverageSettings() {
+  if (!sb) return;
+  const pin = document.getElementById('adminPin').value.trim();
+  const payload = {
+    shift_day_period: document.getElementById('covDayPeriod').value.trim() || '08:00 – 20:00',
+    shift_night_enabled: document.getElementById('covNightEnabled').value === 'true' ? 'true' : 'false',
+    shift_night_period: document.getElementById('covNightPeriod').value.trim() || '20:00 – 08:00',
+    shift_target_headcount: String(Math.max(0, parseInt(document.getElementById('covTargetHeadcount').value, 10) || 0)),
+    shift_gap_details: document.getElementById('covGapDetails').value.trim() || 'N/A',
+    escalation_name: document.getElementById('covEscName').value.trim() || 'Eric Chien',
+    escalation_designation: document.getElementById('covEscDesignation').value.trim() || 'Manager',
+    escalation_contact: document.getElementById('covEscContact').value.trim() || 'Eric_Chien@wiwynn.com',
+    escalation_backup: document.getElementById('covEscBackup').value.trim() || 'N/A',
+    coverage_public: document.getElementById('covPublic').value === 'true' ? 'true' : 'false',
+    coverage_pin: document.getElementById('covViewerPin').value.trim()
+  };
+  say('covSetMsg', '⏳ Saving…', true);
+  const { data, error } = await sb.rpc('admin_save_coverage_settings', {
+    p_admin_pin: pin, p_settings: payload
+  });
+  if (error || !data.ok) { say('covSetMsg', '❌ ' + (data && data.msg || 'Save failed'), false); return; }
+  say('covSetMsg', '✅ ' + data.msg, true);
 }
 
 // default dashboard month = current month
