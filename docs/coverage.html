@@ -322,18 +322,6 @@
     color: #334155;
     border: 1px solid #e2e8f0;
   }
-  .badge-idl {
-    background: #ede9fe;
-    color: #5b21b6;
-    font-size: 10.5px;
-    padding: 2px 7px;
-  }
-  .badge-dl {
-    background: #ecfeff;
-    color: #0e7490;
-    font-size: 10.5px;
-    padding: 2px 7px;
-  }
 
   .contact-actions {
     display: inline-flex;
@@ -687,12 +675,9 @@ function renderBoard(vm) {
       const roleBadge = p.role === 'Shift Lead'
         ? '<span class="badge badge-lead">Shift Lead</span>'
         : '<span class="badge badge-member">member</span>';
-      const laborBadge = p.labor_type
-        ? `<span class="badge ${p.labor_type === 'IDL' ? 'badge-idl' : 'badge-dl'}">${escapeHtml(p.labor_type)}</span>`
-        : '';
       return `<tr>
         <td>
-          <div class="emp-name">${escapeHtml(p.name)} ${laborBadge}</div>
+          <div class="emp-name">${escapeHtml(p.name)}</div>
         </td>
         <td>${roleBadge}</td>
         <td>${p.email ? formatContactHtml(p.email) : '<span style="color:#94a3b8">—</span>'}</td>
